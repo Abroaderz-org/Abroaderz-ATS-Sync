@@ -1,0 +1,68 @@
+name: Build and Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build - ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: abroaderz-ats-sync.exe
+            asset_name: Abroaderz-ATS-Sync-Windows-x64.zip
+
+          - name: macOS Apple Silicon (M1/M2/M3)
+            os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: abroaderz-ats-sync
+            asset_name: Abroaderz-ATS-Sync-macOS-ARM64.tar.gz
+
+          - name: macOS Intel
+            os: macos-13
+            target: x86_64-apple-darwin
+            binary_name: abroaderz-ats-sync
+            asset_name: Abroaderz-ATS-Sync-macOS-Intel.tar.gz
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Build Release Binary
+        run: cargo build --release --target ${{ matrix.platform.target }}
+
+      - name: Package Windows Binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" -DestinationPath "${{ matrix.platform.asset_name }}"
+
+      - name: Package macOS Binary
+        if: runner.os == 'macOS'
+        run: |
+          cd target/${{ matrix.platform.target }}/release/
+          tar -czf "../../../${{ matrix.platform.asset_name }}" "${{ matrix.platform.binary_name }}"
+          cd ../../../
+
+      - name: Upload Binary to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.platform.asset_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
