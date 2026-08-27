@@ -30,3 +30,10 @@ phonenumber = "0.3"
 eframe = "0.29"
 rfd = "0.15"
 open = "5.3"
+
+[profile.release]
+opt-level = 3          # Maximize speed optimizations
+lto = "thin"           # Link-Time Optimization (strips unused cross-crate code)
+codegen-units = 1      # Reduces parallel code generation units for better optimization
+panic = "abort"        # Removes stack unwinding machinery, drastically shrinking binary size
+strip = true           # Automatically strips debug symbols from the output executable
