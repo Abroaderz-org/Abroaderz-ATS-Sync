@@ -19,13 +19,19 @@ pub fn export_candidates_to_excel(
         .set_align(FormatAlign::Left)
         .set_border(FormatBorder::Thin);
 
+    let num_format = Format::new()
+        .set_align(FormatAlign::Center)
+        .set_border(FormatBorder::Thin);
+
     let score_format = Format::new()
         .set_bold()
         .set_align(FormatAlign::Center)
         .set_border(FormatBorder::Thin)
         .set_font_color(Color::RGB(0x16A34A));
 
-    let headers = [
+    let has_score = candidates.first().map_or(false, |c| c.match_score.is_some());
+
+    let mut headers = vec![
         "S.No",
         "Candidate Name",
         "Passport No",
@@ -37,10 +43,13 @@ pub fn export_candidates_to_excel(
         "Local Exp (Yrs)",
         "Overseas Exp (Yrs)",
         "Total Exp (Yrs)",
-        "Match Score (%)",
         "State",
         "Country",
     ];
+
+    if has_score {
+        headers.push("Match Score (%)");
+    }
 
     for (col, header) in headers.iter().enumerate() {
         worksheet.write_string_with_format(0, col as u16, *header, &header_format)?;
@@ -48,7 +57,7 @@ pub fn export_candidates_to_excel(
 
     for (row_idx, c) in candidates.iter().enumerate() {
         let row = (row_idx + 1) as u32;
-        worksheet.write_number_with_format(row, 0, (row_idx + 1) as f64, &cell_format)?;
+        worksheet.write_number_with_format(row, 0, (row_idx + 1) as f64, &num_format)?;
         worksheet.write_string_with_format(row, 1, &c.name, &cell_format)?;
         worksheet.write_string_with_format(row, 2, &c.passport_no, &cell_format)?;
         worksheet.write_string_with_format(row, 3, &c.position, &cell_format)?;
@@ -56,12 +65,15 @@ pub fn export_candidates_to_excel(
         worksheet.write_string_with_format(row, 5, &c.dob, &cell_format)?;
         worksheet.write_string_with_format(row, 6, &c.phone, &cell_format)?;
         worksheet.write_string_with_format(row, 7, &c.email, &cell_format)?;
-        worksheet.write_number_with_format(row, 8, c.local_experience as f64, &cell_format)?;
-        worksheet.write_number_with_format(row, 9, c.overseas_experience as f64, &cell_format)?;
-        worksheet.write_number_with_format(row, 10, c.total_experience as f64, &cell_format)?;
-        worksheet.write_number_with_format(row, 11, c.match_score as f64, &score_format)?;
-        worksheet.write_string_with_format(row, 12, &c.state, &cell_format)?;
-        worksheet.write_string_with_format(row, 13, &c.country, &cell_format)?;
+        worksheet.write_number_with_format(row, 8, c.local_experience as f64, &num_format)?;
+        worksheet.write_number_with_format(row, 9, c.overseas_experience as f64, &num_format)?;
+        worksheet.write_number_with_format(row, 10, c.total_experience as f64, &num_format)?;
+        worksheet.write_string_with_format(row, 11, &c.state, &cell_format)?;
+        worksheet.write_string_with_format(row, 12, &c.country, &cell_format)?;
+
+        if let Some(score) = c.match_score {
+            worksheet.write_number_with_format(row, 13, (score as f64).round(), &score_format)?;
+        }
     }
 
     worksheet.autofit();

@@ -22,12 +22,11 @@ pub struct CandidateRecord {
     pub overseas_experience: f32,
     #[serde(default)]
     pub total_experience: f32,
-    #[serde(default)]
-    pub match_score: f32,
     #[serde(default = "default_none")]
     pub state: String,
     #[serde(default = "default_none")]
     pub country: String,
+    pub match_score: Option<f32>,
 }
 
 fn default_none() -> String {
@@ -47,9 +46,9 @@ impl Default for CandidateRecord {
             local_experience: 0.0,
             overseas_experience: 0.0,
             total_experience: 0.0,
-            match_score: 0.0,
             state: default_none(),
             country: default_none(),
+            match_score: None,
         }
     }
 }

@@ -7,7 +7,9 @@ pub fn export_candidates_to_csv(
 ) -> Result<(), Box<dyn Error>> {
     let mut wtr = csv::Writer::from_path(output_path)?;
 
-    wtr.write_record(&[
+    let has_score = candidates.first().map_or(false, |c| c.match_score.is_some());
+
+    let mut headers = vec![
         "S.No",
         "Candidate Name",
         "Passport No",
@@ -19,13 +21,18 @@ pub fn export_candidates_to_csv(
         "Local Exp (Yrs)",
         "Overseas Exp (Yrs)",
         "Total Exp (Yrs)",
-        "Match Score (%)",
         "State",
         "Country",
-    ])?;
+    ];
+
+    if has_score {
+        headers.push("Match Score (%)");
+    }
+
+    wtr.write_record(&headers)?;
 
     for (idx, c) in candidates.iter().enumerate() {
-        wtr.write_record(&[
+        let mut row = vec![
             (idx + 1).to_string(),
             c.name.clone(),
             c.passport_no.clone(),
@@ -37,10 +44,15 @@ pub fn export_candidates_to_csv(
             format!("{:.1}", c.local_experience),
             format!("{:.1}", c.overseas_experience),
             format!("{:.1}", c.total_experience),
-            format!("{:.1}", c.match_score),
             c.state.clone(),
             c.country.clone(),
-        ])?;
+        ];
+
+        if let Some(score) = c.match_score {
+            row.push(format!("{:.1}", score));
+        }
+
+        wtr.write_record(&row)?;
     }
 
     wtr.flush()?;
