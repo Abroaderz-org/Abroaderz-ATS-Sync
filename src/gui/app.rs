@@ -54,12 +54,8 @@ fn process_directory(
         return Err("No valid PDF, DOCX, or image resumes found in the chosen folder.".to_string());
     }
 
-    // Sort candidates descending by match score
-    candidates.sort_by(|a, b| {
-        let score_a: f32 = a.match_score.parse().unwrap_or(0.0);
-        let score_b: f32 = b.match_score.parse().unwrap_or(0.0);
-        score_b.partial_cmp(&score_a).unwrap()
-    });
+    // Sort candidates descending by numeric match score
+    candidates.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap_or(std::cmp::Ordering::Equal));
 
     let count = candidates.len();
     let mut generated_csv = None;

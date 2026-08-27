@@ -48,14 +48,14 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
         .unwrap_or_else(|| "N/A".to_string());
 
     // 8. Experience Breakdown (Years)
-    let (local_exp_years, overseas_exp_years) = extract_experience_years(&clean_text);
-    let total_exp_years = local_exp_years + overseas_exp_years;
+    let (local_experience, overseas_experience) = extract_experience_years(&clean_text);
+    let total_experience = local_experience + overseas_experience;
 
     // 9. Location
     let (state, country) = extract_location(&clean_text);
 
     // 10. Compute Match Score vs Job Description
-    let match_score = calculate_jd_score(&clean_text, &position, total_exp_years, jd_text);
+    let match_score = calculate_jd_score(&clean_text, &position, total_experience, jd_text);
 
     CandidateRecord {
         name,
@@ -65,12 +65,12 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
         dob,
         phone,
         email,
-        local_exp_years,
-        overseas_exp_years,
-        total_exp_years,
+        local_experience,
+        overseas_experience,
+        total_experience,
+        match_score,
         state,
         country,
-        match_score,
     }
 }
 
@@ -136,7 +136,6 @@ fn extract_experience_years(text: &str) -> (f32, f32) {
     let lower = text.to_lowercase();
     let overseas_keywords = ["saudi arabia", "kuwait", "qatar", "uae", "abu dhabi", "oman", "bahrain", "aramco", "sabic", "knpc", "descon", "anabeeb"];
     
-    // Look for explicit "X+ years experience" claims
     let exp_re = Regex::new(r"(\d{1,2})\+?\s*(?:years|yrs)\s*(?:of)?\s*experience").unwrap();
     let mut total_declared: f32 = 0.0;
     if let Some(c) = exp_re.captures(&lower) {
@@ -157,7 +156,6 @@ fn extract_experience_years(text: &str) -> (f32, f32) {
         }
     }
 
-    // Default heuristics based on certifications count
     if is_overseas {
         (2.0, 5.0)
     } else {
@@ -182,7 +180,6 @@ fn extract_location(text: &str) -> (String, String) {
 
 fn calculate_jd_score(resume_text: &str, position: &str, total_exp: f32, jd_text: &str) -> f32 {
     if jd_text.trim().is_empty() {
-        // Base score calculated from experience and role
         return (60.0 + (total_exp * 3.5)).min(98.0);
     }
 

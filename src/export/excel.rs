@@ -56,9 +56,9 @@ pub fn export_candidates_to_excel(
         worksheet.write_string_with_format(row, 5, &c.dob, &cell_format)?;
         worksheet.write_string_with_format(row, 6, &c.phone, &cell_format)?;
         worksheet.write_string_with_format(row, 7, &c.email, &cell_format)?;
-        worksheet.write_number_with_format(row, 8, c.local_exp_years as f64, &cell_format)?;
-        worksheet.write_number_with_format(row, 9, c.overseas_exp_years as f64, &cell_format)?;
-        worksheet.write_number_with_format(row, 10, c.total_exp_years as f64, &cell_format)?;
+        worksheet.write_number_with_format(row, 8, c.local_experience as f64, &cell_format)?;
+        worksheet.write_number_with_format(row, 9, c.overseas_experience as f64, &cell_format)?;
+        worksheet.write_number_with_format(row, 10, c.total_experience as f64, &cell_format)?;
         worksheet.write_number_with_format(row, 11, c.match_score as f64, &score_format)?;
         worksheet.write_string_with_format(row, 12, &c.state, &cell_format)?;
         worksheet.write_string_with_format(row, 13, &c.country, &cell_format)?;

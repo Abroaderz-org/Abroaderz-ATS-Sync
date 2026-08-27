@@ -16,14 +16,14 @@ pub struct CandidateRecord {
     pub phone: String,
     #[serde(default = "default_none")]
     pub email: String,
-    #[serde(default = "default_zero")]
-    pub local_experience: String,
-    #[serde(default = "default_zero")]
-    pub overseas_experience: String,
-    #[serde(default = "default_zero")]
-    pub total_experience: String,
-    #[serde(default = "default_zero")]
-    pub match_score: String,
+    #[serde(default)]
+    pub local_experience: f32,
+    #[serde(default)]
+    pub overseas_experience: f32,
+    #[serde(default)]
+    pub total_experience: f32,
+    #[serde(default)]
+    pub match_score: f32,
     #[serde(default = "default_none")]
     pub state: String,
     #[serde(default = "default_none")]
@@ -32,10 +32,6 @@ pub struct CandidateRecord {
 
 fn default_none() -> String {
     "None".to_string()
-}
-
-fn default_zero() -> String {
-    "0.0".to_string()
 }
 
 impl Default for CandidateRecord {
@@ -48,10 +44,10 @@ impl Default for CandidateRecord {
             dob: default_none(),
             phone: default_none(),
             email: default_none(),
-            local_experience: default_zero(),
-            overseas_experience: default_zero(),
-            total_experience: default_zero(),
-            match_score: default_zero(),
+            local_experience: 0.0,
+            overseas_experience: 0.0,
+            total_experience: 0.0,
+            match_score: 0.0,
             state: default_none(),
             country: default_none(),
         }
