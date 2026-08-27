@@ -4,9 +4,14 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-latest
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -37,14 +42,19 @@ jobs:
         with:
           targets: ${{ matrix.platform.target }}
 
+      # Global Rust compiler caching
+      - name: Rust Cache Action
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.platform.target }}
+
       - name: Build Release Binary
         run: cargo build --release --target ${{ matrix.platform.target }}
 
       - name: Package Windows Binary
         if: runner.os == 'Windows'
-        shell: pwsh
         run: |
-          Compress-Archive -Path "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}" -DestinationPath "${{ matrix.platform.asset_name }}"
+          7z a -tzip "${{ matrix.platform.asset_name }}" "./target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}"
 
       - name: Package macOS Binary
         if: runner.os == 'macOS'
@@ -53,12 +63,31 @@ jobs:
           tar -czf "../../../${{ matrix.platform.asset_name }}" "${{ matrix.platform.binary_name }}"
           cd ../../../
 
-      - name: Upload Binary to Release
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.platform.name }}
+          path: ${{ matrix.platform.asset_name }}
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish to Latest Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: latest
-          name: "Latest Build"
-          files: ${{ matrix.platform.asset_name }}
+          name: "Latest Continuous Build"
+          files: release-assets/*
           draft: false
           prerelease: false
           generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
