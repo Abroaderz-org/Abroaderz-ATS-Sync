@@ -10,7 +10,7 @@ pub fn export_candidates_to_csv(
     wtr.write_record([
         "Sno", "Name", "Passport No", "Position", "Education", "DOB",
         "Phone", "Email", "Local Exp", "Overseas Exp", "Total Exp",
-        "State", "Country", "Score",
+        "State", "Country",
     ])?;
 
     for (idx, c) in candidates.iter().enumerate() {
@@ -28,7 +28,6 @@ pub fn export_candidates_to_csv(
             c.total_experience.clone(),
             c.state.clone(),
             c.country.clone(),
-            c.score.clone().unwrap_or_else(|| "N/A".to_string()),
         ])?;
     }
 

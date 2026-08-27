@@ -2,54 +2,51 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CandidateRecord {
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub name: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub passport_no: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub position: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub education: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub dob: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub phone: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub email: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub local_experience: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub overseas_experience: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub total_experience: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub state: String,
-    #[serde(default = "default_not_found")]
+    #[serde(default = "default_none")]
     pub country: String,
-    #[serde(default)]
-    pub score: Option<String>,
 }
 
-fn default_not_found() -> String {
-    "Not Found".to_string()
+fn default_none() -> String {
+    "None".to_string()
 }
 
 impl Default for CandidateRecord {
     fn default() -> Self {
         Self {
-            name: default_not_found(),
-            passport_no: default_not_found(),
-            position: default_not_found(),
-            education: default_not_found(),
-            dob: default_not_found(),
-            phone: default_not_found(),
-            email: default_not_found(),
-            local_experience: default_not_found(),
-            overseas_experience: default_not_found(),
-            total_experience: default_not_found(),
-            state: default_not_found(),
-            country: default_not_found(),
-            score: None,
+            name: default_none(),
+            passport_no: default_none(),
+            position: default_none(),
+            education: default_none(),
+            dob: default_none(),
+            phone: default_none(),
+            email: default_none(),
+            local_experience: default_none(),
+            overseas_experience: default_none(),
+            total_experience: default_none(),
+            state: default_none(),
+            country: default_none(),
         }
     }
 }

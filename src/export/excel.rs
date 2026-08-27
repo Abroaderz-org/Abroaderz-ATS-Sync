@@ -1,5 +1,5 @@
 use crate::engine::schema::CandidateRecord;
-use rust_xlsxwriter::{Format, FormatBorder, Workbook, XlsxError};
+use rust_xlsxwriter::{Format, FormatAlign, FormatBorder, Workbook, XlsxError};
 
 pub fn export_candidates_to_excel(
     candidates: &[CandidateRecord],
@@ -10,41 +10,54 @@ pub fn export_candidates_to_excel(
 
     let header_format = Format::new()
         .set_bold()
-        .set_background_color("#1E3A8A")
-        .set_font_color("#FFFFFF")
+        .set_background_color(rust_xlsxwriter::Color::RGB(0x0E, 0xA5, 0xE9))
+        .set_font_color(rust_xlsxwriter::Color::RGB(0xFF, 0xFF, 0xFF))
+        .set_align(FormatAlign::Center)
+        .set_border(FormatBorder::Thin);
+
+    let cell_format = Format::new()
+        .set_align(FormatAlign::Left)
         .set_border(FormatBorder::Thin);
 
     let headers = [
-        "Sno", "Name", "Passport No", "Position", "Education", "DOB",
-        "Phone", "Email", "Local Exp", "Overseas Exp", "Total Exp",
-        "State", "Country", "Score",
+        "S.No",
+        "Candidate Name",
+        "Passport No",
+        "Position / Trade",
+        "Education / Degree",
+        "Date of Birth",
+        "Phone Number",
+        "Email Address",
+        "Local Experience",
+        "Overseas Experience",
+        "Total Experience",
+        "State",
+        "Country",
     ];
 
-    for (col_idx, header) in headers.iter().enumerate() {
-        worksheet.write_with_format(0, col_idx as u16, *header, &header_format)?;
+    for (col, header) in headers.iter().enumerate() {
+        worksheet.write_string_with_format(0, col as u16, *header, &header_format)?;
     }
 
     for (row_idx, c) in candidates.iter().enumerate() {
         let row = (row_idx + 1) as u32;
-        worksheet.write(row, 0, (row_idx + 1) as u32)?;
-        worksheet.write(row, 1, &c.name)?;
-        worksheet.write(row, 2, &c.passport_no)?;
-        worksheet.write(row, 3, &c.position)?;
-        worksheet.write(row, 4, &c.education)?;
-        worksheet.write(row, 5, &c.dob)?;
-        worksheet.write(row, 6, &c.phone)?;
-        worksheet.write(row, 7, &c.email)?;
-        worksheet.write(row, 8, &c.local_experience)?;
-        worksheet.write(row, 9, &c.overseas_experience)?;
-        worksheet.write(row, 10, &c.total_experience)?;
-        worksheet.write(row, 11, &c.state)?;
-        worksheet.write(row, 12, &c.country)?;
-        worksheet.write(row, 13, c.score.as_deref().unwrap_or("N/A"))?;
+        worksheet.write_number_with_format(row, 0, (row_idx + 1) as f64, &cell_format)?;
+        worksheet.write_string_with_format(row, 1, &c.name, &cell_format)?;
+        worksheet.write_string_with_format(row, 2, &c.passport_no, &cell_format)?;
+        worksheet.write_string_with_format(row, 3, &c.position, &cell_format)?;
+        worksheet.write_string_with_format(row, 4, &c.education, &cell_format)?;
+        worksheet.write_string_with_format(row, 5, &c.dob, &cell_format)?;
+        worksheet.write_string_with_format(row, 6, &c.phone, &cell_format)?;
+        worksheet.write_string_with_format(row, 7, &c.email, &cell_format)?;
+        worksheet.write_string_with_format(row, 8, &c.local_experience, &cell_format)?;
+        worksheet.write_string_with_format(row, 9, &c.overseas_experience, &cell_format)?;
+        worksheet.write_string_with_format(row, 10, &c.total_experience, &cell_format)?;
+        worksheet.write_string_with_format(row, 11, &c.state, &cell_format)?;
+        worksheet.write_string_with_format(row, 12, &c.country, &cell_format)?;
     }
 
-    // Auto-fit column widths so long text isn't cut off
     worksheet.autofit();
-
     workbook.save(output_path)?;
+
     Ok(())
 }
