@@ -1,5 +1,5 @@
 use crate::engine::schema::CandidateRecord;
-use rust_xlsxwriter::{Format, FormatAlign, FormatBorder, Workbook, XlsxError};
+use rust_xlsxwriter::{Color, Format, FormatAlign, FormatBorder, Workbook, XlsxError};
 
 pub fn export_candidates_to_excel(
     candidates: &[CandidateRecord],
@@ -10,8 +10,8 @@ pub fn export_candidates_to_excel(
 
     let header_format = Format::new()
         .set_bold()
-        .set_background_color(rust_xlsxwriter::Color::RGB(0x0E, 0xA5, 0xE9))
-        .set_font_color(rust_xlsxwriter::Color::RGB(0xFF, 0xFF, 0xFF))
+        .set_background_color(Color::RGB(0x0EA5E9)) // Single u32 hex integer
+        .set_font_color(Color::RGB(0xFFFFFF))       // Single u32 hex integer
         .set_align(FormatAlign::Center)
         .set_border(FormatBorder::Thin);
 

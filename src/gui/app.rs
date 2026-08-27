@@ -141,7 +141,6 @@ impl eframe::App for AtsSyncApp {
             Color32::from_rgb(226, 232, 240)
         };
         let brand_accent = Color32::from_rgb(14, 165, 233);
-        let brand_hover = Color32::from_rgb(56, 189, 248);
 
         // Interactive styling
         let mut style = (*ctx.style()).clone();
