@@ -24,6 +24,10 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+    pub fn load() -> Self {
+        Self::load_or_create("config.toml")
+    }
+
     pub fn load_or_create<P: AsRef<Path>>(config_path: P) -> Self {
         let path = config_path.as_ref();
 

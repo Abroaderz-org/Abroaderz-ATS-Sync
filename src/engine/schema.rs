@@ -33,3 +33,23 @@ pub struct CandidateRecord {
 fn default_not_found() -> String {
     "Not Found".to_string()
 }
+
+impl Default for CandidateRecord {
+    fn default() -> Self {
+        Self {
+            name: default_not_found(),
+            passport_no: default_not_found(),
+            position: default_not_found(),
+            education: default_not_found(),
+            dob: default_not_found(),
+            phone: default_not_found(),
+            email: default_not_found(),
+            local_experience: default_not_found(),
+            overseas_experience: default_not_found(),
+            total_experience: default_not_found(),
+            state: default_not_found(),
+            country: default_not_found(),
+            score: None,
+        }
+    }
+}

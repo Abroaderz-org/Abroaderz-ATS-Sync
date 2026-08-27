@@ -1,66 +1,55 @@
 use crate::engine::schema::CandidateRecord;
 use regex::Regex;
+use strsim::jaro_winkler;
 
-pub struct InferenceEngine;
+pub fn infer_candidate_details(raw_text: &str, file_name: &str) -> CandidateRecord {
+    let mut record = CandidateRecord::default();
 
-impl InferenceEngine {
-    pub fn process_candidate(raw_text: &str, file_name: &str) -> CandidateRecord {
-        let mut candidate = CandidateRecord {
-            name: file_name.to_string(),
-            passport_no: "Not Found".to_string(),
-            position: "Not Found".to_string(),
-            education: "Not Found".to_string(),
-            dob: "Not Found".to_string(),
-            phone: "Not Found".to_string(),
-            email: "Not Found".to_string(),
-            local_experience: "Not Found".to_string(),
-            overseas_experience: "Not Found".to_string(),
-            total_experience: "Not Found".to_string(),
-            state: "Not Found".to_string(),
-            country: "Not Found".to_string(),
-            score: None,
-        };
+    // Candidate Name from sanitized file name
+    let clean_name = file_name
+        .trim_end_matches(".pdf")
+        .trim_end_matches(".png")
+        .trim_end_matches(".jpg")
+        .trim_end_matches(".jpeg")
+        .trim_end_matches(".webp")
+        .replace(['_', '-'], " ");
+    record.name = clean_name;
 
-        // 1. Contact Patterns
-        if let Some(email) = find_match(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", raw_text) {
-            candidate.email = email;
-        }
+    // Contact matching
+    let email_re = Regex::new(r"(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}").unwrap();
+    if let Some(mat) = email_re.find(raw_text) {
+        record.email = mat.as_str().to_string();
+    }
 
-        if let Some(phone) = find_match(r"(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", raw_text) {
-            candidate.phone = phone;
-        }
+    let phone_re = Regex::new(r"(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}").unwrap();
+    if let Some(mat) = phone_re.find(raw_text) {
+        record.phone = mat.as_str().to_string();
+    }
 
-        // 2. Passport Format (Standard 1 letter followed by 7 digits)
-        if let Some(passport) = find_match(r"\b[A-Z][0-9]{7}\b", raw_text) {
-            candidate.passport_no = passport;
-        }
+    // Passport detection (standard format: 1 Letter + 7 Digits)
+    let passport_re = Regex::new(r"\b[A-Z][0-9]{7}\b").unwrap();
+    if let Some(mat) = passport_re.find(raw_text) {
+        record.passport_no = mat.as_str().to_string();
+    }
 
-        // 3. Technical Qualifications
-        let edu_keywords = ["B.Tech", "B.E.", "Diploma", "ITI", "HSC", "SSLC", "Bachelor", "Master"];
-        for edu in edu_keywords {
-            if raw_text.to_lowercase().contains(&edu.to_lowercase()) {
-                candidate.education = edu.to_string();
-                break;
+    // Fuzzy GCC / Overseas Experience Matching
+    let gcc_locations = ["Dubai", "UAE", "Saudi Arabia", "Qatar", "Oman", "Kuwait", "Bahrain", "Abu Dhabi"];
+    let mut gcc_matches = Vec::new();
+
+    for word in raw_text.split_whitespace() {
+        let clean_word = word.trim_matches(|c: char| !c.is_alphabetic());
+        for &loc in &gcc_locations {
+            if jaro_winkler(clean_word, loc) > 0.88 {
+                if !gcc_matches.contains(&loc.to_string()) {
+                    gcc_matches.push(loc.to_string());
+                }
             }
         }
-
-        // 4. Overseas & GCC Experience Detection
-        let overseas_locations = ["Dubai", "UAE", "Saudi", "KSA", "Qatar", "Oman", "Kuwait", "Bahrain", "Gulf"];
-        let is_overseas = overseas_locations.iter().any(|loc| raw_text.to_lowercase().contains(&loc.to_lowercase()));
-        
-        if is_overseas {
-            candidate.overseas_experience = "GCC / Overseas Experience Found".to_string();
-        }
-
-        // 5. Total Experience Detection (e.g. "5 years", "3+ yrs")
-        if let Some(exp) = find_match(r"(?i)\b\d{1,2}\+?\s*(years?|yrs?)\b", raw_text) {
-            candidate.total_experience = exp;
-        }
-
-        candidate
     }
-}
 
-fn find_match(pattern: &str, text: &str) -> Option<String> {
-    Regex::new(pattern).ok()?.find(text).map(|m| m.as_str().to_string())
+    if !gcc_matches.is_empty() {
+        record.overseas_experience = gcc_matches.join(", ");
+    }
+
+    record
 }

@@ -1,26 +1,46 @@
-use image::GenericImageView;
+use ocrs::{ImageSource, OcrEngine, OcrEngineParams};
+use rten::Model;
 use std::path::Path;
 
-pub fn load_image_bytes<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
-    let path_ref = path.as_ref();
-    
-    let img = image::open(path_ref)
-        .map_err(|e| format!("Failed to read image {:?}: {}", path_ref.file_name(), e))?;
+pub fn extract_image_text<P: AsRef<Path>>(path: P) -> Result<String, String> {
+    let img = image::open(path.as_ref())
+        .map_err(|e| format!("Failed to open image: {}", e))?
+        .into_rgb8();
 
     let (width, height) = img.dimensions();
-    if width == 0 || height == 0 {
-        return Err("Image contains invalid zero dimensions.".to_string());
-    }
+    let img_source = ImageSource::from_bytes(img.as_raw(), (width, height))
+        .map_err(|e| format!("Failed to create ImageSource: {}", e))?;
 
-    std::fs::read(path_ref)
-        .map_err(|e| format!("Failed to load raw bytes: {}", e))
-}
+    // Embedded models from models/ directory
+    let detection_model_bytes = include_bytes!("../../models/text-detection.rten");
+    let rec_model_bytes = include_bytes!("../../models/text-recognition.rten");
 
-pub fn extract_image_text<P: AsRef<Path>>(path: P) -> Result<String, String> {
-    let _bytes = load_image_bytes(&path)?;
+    let detection_model = Model::load(detection_model_bytes)
+        .map_err(|e| format!("Failed to load text detection model: {}", e))?;
+    let recognition_model = Model::load(rec_model_bytes)
+        .map_err(|e| format!("Failed to load text recognition model: {}", e))?;
+
+    let engine = OcrEngine::new(OcrEngineParams {
+        detection_model: Some(detection_model),
+        recognition_model: Some(recognition_model),
+        ..Default::default()
+    }).map_err(|e| format!("Failed to initialize OCR engine: {}", e))?;
+
+    let ocr_input = engine.prepare_input(img_source)
+        .map_err(|e| format!("OCR preparation failed: {}", e))?;
     
-    Ok(format!(
-        "[Image Resume Detected: {}]",
-        path.as_ref().display()
-    ))
+    let word_rects = engine.detect_words(&ocr_input)
+        .map_err(|e| format!("Word detection failed: {}", e))?;
+        
+    let line_rects = engine.find_text_lines(&ocr_input, &word_rects);
+    let texts = engine.recognize_text(&ocr_input, &line_rects)
+        .map_err(|e| format!("Text recognition failed: {}", e))?;
+
+    let full_text = texts
+        .into_iter()
+        .filter_map(|line| line.map(|l| l.to_string()))
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    Ok(full_text)
 }
