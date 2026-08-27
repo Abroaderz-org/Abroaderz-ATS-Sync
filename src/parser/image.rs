@@ -11,13 +11,12 @@ pub fn extract_image_text<P: AsRef<Path>>(path: P) -> Result<String, String> {
     let img_source = ImageSource::from_bytes(img.as_raw(), (width, height))
         .map_err(|e| format!("Failed to create ImageSource: {}", e))?;
 
-    // Embedded models from models/ directory
     let detection_model_bytes = include_bytes!("../../models/text-detection.rten");
     let rec_model_bytes = include_bytes!("../../models/text-recognition.rten");
 
-    let detection_model = Model::load(detection_model_bytes)
+    let detection_model = Model::load(detection_model_bytes.to_vec())
         .map_err(|e| format!("Failed to load text detection model: {}", e))?;
-    let recognition_model = Model::load(rec_model_bytes)
+    let recognition_model = Model::load(rec_model_bytes.to_vec())
         .map_err(|e| format!("Failed to load text recognition model: {}", e))?;
 
     let engine = OcrEngine::new(OcrEngineParams {

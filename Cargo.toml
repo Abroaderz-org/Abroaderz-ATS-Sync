@@ -14,7 +14,7 @@ pdf-extract = "0.12"
 lopdf = "0.34"
 image = "0.25"
 ocrs = "0.12"
-rten = "0.22"
+rten = "0.24"
 
 # Export Engines
 rust_xlsxwriter = { version = "0.89", features = ["serde"] }

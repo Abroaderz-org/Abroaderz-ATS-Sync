@@ -65,7 +65,7 @@ pub struct AtsSyncApp {
 impl Default for AtsSyncApp {
     fn default() -> Self {
         let config = AppConfig::load();
-        let default_dir = PathBuf::from(&config.input_dir);
+        let default_dir = PathBuf::from(&config.input_directory);
         Self {
             folder_path: if default_dir.exists() { Some(default_dir) } else { None },
             status_message: "Ready. Select a folder containing candidate resumes.".to_string(),
@@ -85,7 +85,7 @@ impl eframe::App for AtsSyncApp {
                 ui.heading(
                     egui::RichText::new("Abroaderz ATS Sync")
                         .size(24.0)
-                        .bold()
+                        .strong()
                         .color(egui::Color32::from_rgb(0, 168, 232)),
                 );
                 ui.label("Automated Resume Parsing & Export Tool");
@@ -169,7 +169,7 @@ impl eframe::App for AtsSyncApp {
                     ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new(format!("✓ {} Candidates Successfully Parsed", count))
-                            .bold()
+                            .strong()
                             .color(egui::Color32::GREEN),
                     );
 
