@@ -2,8 +2,8 @@ name: Build and Release Binaries
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -56,6 +56,8 @@ jobs:
       - name: Upload Binary to Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: latest
+          name: "Latest Build"
           files: ${{ matrix.platform.asset_name }}
           draft: false
           prerelease: false
