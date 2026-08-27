@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod config;
 mod engine;
 mod export;
 pub mod gui;
@@ -12,8 +11,8 @@ use gui::AtsSyncApp;
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([720.0, 560.0])
-            .with_min_inner_size([650.0, 500.0])
+            .with_inner_size([680.0, 500.0])
+            .with_min_inner_size([620.0, 460.0])
             .with_resizable(true)
             .with_title("Abroaderz ATS Sync"),
         ..Default::default()

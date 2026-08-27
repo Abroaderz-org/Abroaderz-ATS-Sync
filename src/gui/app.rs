@@ -4,7 +4,6 @@ use eframe::egui::{
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::config::AppConfig;
 use crate::engine::inference::infer_candidate_details;
 use crate::export::{csv::export_candidates_to_csv, excel::export_candidates_to_excel};
 use crate::parser::{docx::extract_docx_text, image::extract_image_text, pdf::extract_pdf_text};
@@ -99,11 +98,13 @@ pub struct AtsSyncApp {
 
 impl Default for AtsSyncApp {
     fn default() -> Self {
-        let config = AppConfig::load();
-        let default_dir = PathBuf::from(&config.input_directory);
+        // Look for standard local resumes folder or fallback cleanly
+        let fallback = PathBuf::from("./resumes");
+        let initial_path = if fallback.exists() { Some(fallback) } else { None };
+
         Self {
-            folder_path: if default_dir.exists() { Some(default_dir) } else { None },
-            status_message: "Ready. Select a source directory to parse profiles.".to_string(),
+            folder_path: initial_path,
+            status_message: "Ready. Select a folder to begin extraction.".to_string(),
             candidates_count: None,
             csv_file: None,
             excel_file: None,
@@ -115,12 +116,10 @@ impl Default for AtsSyncApp {
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // High-DPI scaling check for crisp font geometry
         if ctx.pixels_per_point() < 1.25 {
             ctx.set_pixels_per_point(1.25);
         }
 
-        // Apply theme
         if self.dark_mode {
             ctx.set_visuals(egui::Visuals::dark());
         } else {
@@ -128,8 +127,6 @@ impl eframe::App for AtsSyncApp {
         }
 
         let is_dark = self.dark_mode;
-
-        // Custom theme palette
         let card_bg = if is_dark {
             Color32::from_rgb(22, 27, 34)
         } else {
@@ -142,30 +139,39 @@ impl eframe::App for AtsSyncApp {
         };
         let brand_accent = Color32::from_rgb(14, 165, 233);
 
-        // Interactive styling
         let mut style = (*ctx.style()).clone();
-        style.visuals.widgets.noninteractive.rounding = Rounding::same(8.0);
-        style.visuals.widgets.inactive.rounding = Rounding::same(8.0);
-        style.visuals.widgets.hovered.rounding = Rounding::same(8.0);
-        style.visuals.widgets.active.rounding = Rounding::same(8.0);
+        style.visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
+        style.visuals.widgets.inactive.rounding = Rounding::same(6.0);
+        style.visuals.widgets.hovered.rounding = Rounding::same(6.0);
+        style.visuals.widgets.active.rounding = Rounding::same(6.0);
         ctx.set_style(style);
 
         egui::CentralPanel::default()
-            .frame(Frame::central_panel(&ctx.style()).inner_margin(Margin::same(28.0)))
+            .frame(Frame::central_panel(&ctx.style()).inner_margin(Margin::symmetric(20.0, 10.0)))
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.set_max_width(560.0);
+                    ui.set_max_width(520.0);
 
-                    // --- Top Utility Bar ---
+                    // --- Header with Right-Aligned Theme Toggle ---
                     ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new("ABROADERZ ATS SYNC")
+                                    .font(FontId::new(18.0, FontFamily::Proportional))
+                                    .strong()
+                                    .color(brand_accent),
+                            );
+                            ui.label(
+                                RichText::new("Automated Neural Resume Pipeline")
+                                    .font(FontId::new(10.5, FontFamily::Proportional))
+                                    .color(if is_dark { Color32::LIGHT_GRAY } else { Color32::DARK_GRAY }),
+                            );
+                        });
+
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let theme_label = if self.dark_mode { "☀ Light" } else { "☾ Dark" };
-                            let theme_btn = egui::Button::new(
-                                RichText::new(theme_label)
-                                    .size(11.5)
-                                    .strong(),
-                            )
-                            .min_size(Vec2::new(76.0, 24.0));
+                            let theme_label = if self.dark_mode { "Light Mode" } else { "Dark Mode" };
+                            let theme_btn = egui::Button::new(RichText::new(theme_label).size(10.5).strong())
+                                .min_size(Vec2::new(76.0, 22.0));
 
                             if ui.add(theme_btn).clicked() {
                                 self.dark_mode = !self.dark_mode;
@@ -173,116 +179,78 @@ impl eframe::App for AtsSyncApp {
                         });
                     });
 
-                    ui.add_space(6.0);
+                    ui.add_space(8.0);
 
-                    // --- Header Branding ---
-                    ui.label(
-                        RichText::new("ABROADERZ ATS SYNC")
-                            .font(FontId::new(24.0, FontFamily::Proportional))
-                            .strong()
-                            .color(brand_accent),
-                    );
-
-                    ui.label(
-                        RichText::new("High-Precision Candidate Ingestion & Structuring Pipeline")
-                            .font(FontId::new(12.0, FontFamily::Proportional))
-                            .color(if is_dark {
-                                Color32::from_rgb(148, 163, 184)
-                            } else {
-                                Color32::from_rgb(100, 116, 139)
-                            }),
-                    );
-
-                    ui.add_space(20.0);
-
-                    // --- Card 1: Source Selection ---
+                    // --- Card 1: Directory Picker ---
                     Frame::none()
                         .fill(card_bg)
-                        .rounding(Rounding::same(12.0))
+                        .rounding(Rounding::same(8.0))
                         .stroke(Stroke::new(1.0_f32, card_border))
-                        .inner_margin(Margin::same(16.0))
+                        .inner_margin(Margin::symmetric(10.0, 8.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new("Source Directory")
-                                        .font(FontId::new(13.0, FontFamily::Proportional))
-                                        .strong(),
-                                );
+                                ui.label(RichText::new("Source Directory:").size(11.5).strong());
                             });
 
-                            ui.add_space(8.0);
+                            ui.add_space(4.0);
 
                             ui.horizontal(|ui| {
                                 let mut path_display = self
                                     .folder_path
                                     .as_ref()
                                     .map(|p| p.to_string_lossy().to_string())
-                                    .unwrap_or_else(|| "No directory selected...".to_string());
+                                    .unwrap_or_else(|| "No folder selected...".to_string());
 
                                 ui.add(
                                     egui::TextEdit::singleline(&mut path_display)
-                                        .desired_width(400.0)
-                                        .margin(Margin::symmetric(10.0, 6.0))
+                                        .desired_width(395.0)
+                                        .margin(Margin::symmetric(6.0, 4.0))
                                         .interactive(false),
                                 );
 
-                                let browse_btn = egui::Button::new(
-                                    RichText::new("Browse").size(12.0).strong(),
-                                )
-                                .min_size(Vec2::new(80.0, 28.0));
+                                let browse_btn = egui::Button::new(RichText::new("Browse").size(11.0).strong())
+                                    .min_size(Vec2::new(70.0, 24.0));
 
                                 if ui.add(browse_btn).clicked() {
                                     if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                                         self.folder_path = Some(folder);
-                                        self.status_message =
-                                            "Target directory set. Ready for execution.".to_string();
+                                        self.status_message = "Ready to parse selected folder.".to_string();
                                     }
                                 }
                             });
                         });
 
-                    ui.add_space(14.0);
+                    ui.add_space(6.0);
 
-                    // --- Card 2: Configuration & Trigger ---
+                    // --- Card 2: Export Options & Execution Trigger ---
                     Frame::none()
                         .fill(card_bg)
-                        .rounding(Rounding::same(12.0))
+                        .rounding(Rounding::same(8.0))
                         .stroke(Stroke::new(1.0_f32, card_border))
-                        .inner_margin(Margin::same(16.0))
+                        .inner_margin(Margin::symmetric(10.0, 8.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new("Export Target:")
-                                        .font(FontId::new(13.0, FontFamily::Proportional))
-                                        .strong(),
-                                );
-                                ui.add_space(12.0);
+                                ui.label(RichText::new("Export Format:").size(11.5).strong());
+                                ui.add_space(6.0);
                                 ui.radio_value(&mut self.export_format, ExportFormat::Excel, "Excel (.xlsx)");
-                                ui.add_space(4.0);
                                 ui.radio_value(&mut self.export_format, ExportFormat::Csv, "CSV (.csv)");
-                                ui.add_space(4.0);
                                 ui.radio_value(&mut self.export_format, ExportFormat::Both, "Both");
                             });
 
-                            ui.add_space(14.0);
+                            ui.add_space(6.0);
 
                             let can_run = self.folder_path.is_some();
                             let run_btn = egui::Button::new(
-                                RichText::new("RUN ATS EXTRACTION")
-                                    .font(FontId::new(13.5, FontFamily::Proportional))
+                                RichText::new("Run ATS Extraction")
+                                    .font(FontId::new(12.5, FontFamily::Proportional))
                                     .strong()
                                     .color(Color32::WHITE),
                             )
-                            .fill(if can_run {
-                                brand_accent
-                            } else {
-                                Color32::from_rgb(100, 116, 139)
-                            })
-                            .min_size(Vec2::new(ui.available_width(), 40.0));
+                            .fill(if can_run { brand_accent } else { Color32::from_rgb(100, 116, 139) })
+                            .min_size(Vec2::new(ui.available_width(), 32.0));
 
                             let response = ui.add_enabled(can_run, run_btn);
 
-                            // Smooth animation on button hover
                             if response.hovered() && can_run {
                                 ui.ctx().request_repaint();
                             }
@@ -297,71 +265,55 @@ impl eframe::App for AtsSyncApp {
                                             self.candidates_count = Some(count);
                                             self.csv_file = csv;
                                             self.excel_file = excel;
-                                            self.status_message = format!(
-                                                "Pipeline completed. {} records processed.",
-                                                count
-                                            );
+                                            self.status_message = format!("Successfully parsed {} candidate profiles.", count);
                                         }
                                         Err(err) => {
-                                            self.status_message = format!("Execution error: {}", err);
+                                            self.status_message = format!("Error: {}", err);
                                         }
                                     }
                                 }
                             }
                         });
 
-                    ui.add_space(14.0);
+                    ui.add_space(6.0);
 
-                    // --- Card 3: Execution Output ---
+                    // --- Card 3: Results & Open Action Buttons ---
                     Frame::none()
                         .fill(card_bg)
-                        .rounding(Rounding::same(12.0))
+                        .rounding(Rounding::same(8.0))
                         .stroke(Stroke::new(1.0_f32, card_border))
-                        .inner_margin(Margin::same(16.0))
+                        .inner_margin(Margin::symmetric(10.0, 8.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new("Pipeline Status")
-                                        .font(FontId::new(13.0, FontFamily::Proportional))
-                                        .strong(),
-                                );
+                                ui.label(RichText::new("Status & Results").size(11.5).strong());
                             });
 
-                            ui.add_space(6.0);
+                            ui.add_space(2.0);
 
                             ui.label(
                                 RichText::new(&self.status_message)
-                                    .font(FontId::new(12.0, FontFamily::Proportional))
+                                    .font(FontId::new(11.0, FontFamily::Proportional))
                                     .italics()
-                                    .color(if is_dark {
-                                        Color32::from_rgb(148, 163, 184)
-                                    } else {
-                                        Color32::from_rgb(100, 116, 139)
-                                    }),
+                                    .color(if is_dark { Color32::LIGHT_GRAY } else { Color32::DARK_GRAY }),
                             );
 
                             if let Some(count) = self.candidates_count {
-                                ui.add_space(10.0);
-
-                                // Pulsing badge indicator
-                                let time = ui.input(|i| i.time);
-                                let alpha = ((time * 2.0).sin() * 25.0 + 230.0) as u8;
-                                let sync_color = Color32::from_rgba_premultiplied(34, 197, 94, alpha);
-
+                                ui.add_space(4.0);
                                 ui.label(
-                                    RichText::new(format!("●  {} Candidate Profiles Synchronized", count))
-                                        .font(FontId::new(13.0, FontFamily::Proportional))
+                                    RichText::new(format!("[SUCCESS] {} Candidate Profiles Synced", count))
+                                        .font(FontId::new(11.5, FontFamily::Proportional))
                                         .strong()
-                                        .color(sync_color),
+                                        .color(Color32::from_rgb(34, 197, 94)),
                                 );
 
-                                ui.add_space(12.0);
+                                ui.add_space(6.0);
                                 ui.horizontal_centered(|ui| {
                                     if let Some(ref excel) = self.excel_file {
                                         let xlsx_btn = egui::Button::new(
-                                            RichText::new("Open Excel").size(12.0).strong(),
+                                            RichText::new("Open Excel").size(11.0).strong(),
                                         )
-                                        .min_size(Vec2::new(140.0, 32.0));
+                                        .min_size(Vec2::new(110.0, 26.0));
+
                                         if ui.add(xlsx_btn).clicked() {
                                             let _ = open::that(excel);
                                         }
@@ -369,9 +321,10 @@ impl eframe::App for AtsSyncApp {
 
                                     if let Some(ref csv) = self.csv_file {
                                         let csv_btn = egui::Button::new(
-                                            RichText::new("Open CSV").size(12.0).strong(),
+                                            RichText::new("Open CSV").size(11.0).strong(),
                                         )
-                                        .min_size(Vec2::new(140.0, 32.0));
+                                        .min_size(Vec2::new(110.0, 26.0));
+
                                         if ui.add(csv_btn).clicked() {
                                             let _ = open::that(csv);
                                         }
