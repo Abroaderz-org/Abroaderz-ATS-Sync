@@ -1,4 +1,4 @@
-use eframe::egui;
+use eframe::egui::{self, Color32, CornerRadius, Frame, Margin, RichText, Stroke, Vec2};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -37,7 +37,7 @@ fn process_directory(dir_path: &Path) -> Result<(usize, String, String), String>
     }
 
     if candidates.is_empty() {
-        return Err("No valid PDF or Image resumes found in selected directory.".to_string());
+        return Err("No valid PDF or image resumes found in the chosen folder.".to_string());
     }
 
     let count = candidates.len();
@@ -60,6 +60,7 @@ pub struct AtsSyncApp {
     csv_file: Option<String>,
     excel_file: Option<String>,
     is_processing: bool,
+    dark_mode: bool,
 }
 
 impl Default for AtsSyncApp {
@@ -68,126 +69,207 @@ impl Default for AtsSyncApp {
         let default_dir = PathBuf::from(&config.input_directory);
         Self {
             folder_path: if default_dir.exists() { Some(default_dir) } else { None },
-            status_message: "Ready. Select a folder containing candidate resumes.".to_string(),
+            status_message: "Ready. Select a folder to begin extraction.".to_string(),
             candidates_count: None,
             csv_file: None,
             excel_file: None,
             is_processing: false,
+            dark_mode: true,
         }
     }
 }
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.add_space(10.0);
-                ui.heading(
-                    egui::RichText::new("Abroaderz ATS Sync")
-                        .size(24.0)
-                        .strong()
-                        .color(egui::Color32::from_rgb(0, 168, 232)),
-                );
-                ui.label("Automated Resume Parsing & Export Tool");
-                ui.add_space(15.0);
-            });
+        // Sync theme visuals
+        if self.dark_mode {
+            ctx.set_visuals(egui::Visuals::dark());
+        } else {
+            ctx.set_visuals(egui::Visuals::light());
+        }
 
-            ui.group(|ui| {
-                ui.heading("1. Resume Source Folder");
-                ui.add_space(5.0);
-                ui.horizontal(|ui| {
-                    let mut path_str = self
-                        .folder_path
-                        .as_ref()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "No folder selected...".to_string());
+        let is_dark = self.dark_mode;
+        let card_bg = if is_dark {
+            Color32::from_rgb(26, 32, 44)
+        } else {
+            Color32::from_rgb(248, 250, 252)
+        };
+        let card_border = if is_dark {
+            Color32::from_rgb(51, 65, 85)
+        } else {
+            Color32::from_rgb(226, 232, 240)
+        };
+        let brand_accent = Color32::from_rgb(14, 165, 233); // Sky blue
+        let brand_accent_hover = Color32::from_rgb(2, 132, 199);
 
-                    ui.add(
-                        egui::TextEdit::singleline(&mut path_str)
-                            .desired_width(450.0)
-                            .interactive(false),
-                    );
+        egui::CentralPanel::default()
+            .frame(Frame::none().inner_margin(Margin::same(20.0)))
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.set_max_width(540.0);
 
-                    if ui.button("📁 Browse...").clicked() {
-                        if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                            self.folder_path = Some(folder);
-                            self.status_message = "Folder selected. Ready to sync.".to_string();
+                    // --- Header with circular Theme Toggle ---
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.heading(
+                                RichText::new("Abroaderz ATS Sync")
+                                    .size(22.0)
+                                    .strong()
+                                    .color(brand_accent),
+                            );
+                            ui.label(
+                                RichText::new("Automated Neural Resume Pipeline")
+                                    .size(12.0)
+                                    .color(if is_dark { Color32::LIGHT_GRAY } else { Color32::DARK_GRAY }),
+                            );
+                        });
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let theme_icon = if self.dark_mode { "☀️" } else { "🌙" };
+                            let theme_btn = egui::Button::new(RichText::new(theme_icon).size(14.0))
+                                .corner_radius(CornerRadius::same(16))
+                                .min_size(Vec2::new(32.0, 32.0));
+
+                            if ui.add(theme_btn).clicked() {
+                                self.dark_mode = !self.dark_mode;
+                            }
+                        });
+                    });
+
+                    ui.add_space(14.0);
+
+                    // --- Card 1: Folder Selection ---
+                    Frame::none()
+                        .fill(card_bg)
+                        .corner_radius(CornerRadius::same(10))
+                        .stroke(Stroke::new(1.0, card_border))
+                        .inner_margin(Margin::same(14.0))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("📂 Source Directory").size(13.0).strong());
+                            });
+                            ui.add_space(6.0);
+
+                            ui.horizontal(|ui| {
+                                let mut path_display = self
+                                    .folder_path
+                                    .as_ref()
+                                    .map(|p| p.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| "No folder selected...".to_string());
+
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut path_display)
+                                        .desired_width(385.0)
+                                        .corner_radius(CornerRadius::same(6))
+                                        .interactive(false),
+                                );
+
+                                let browse_btn = egui::Button::new(RichText::new("Browse").size(12.0).strong())
+                                    .corner_radius(CornerRadius::same(6))
+                                    .min_size(Vec2::new(75.0, 26.0));
+
+                                if ui.add(browse_btn).clicked() {
+                                    if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+                                        self.folder_path = Some(folder);
+                                        self.status_message = "Target directory set. Ready to parse.".to_string();
+                                    }
+                                }
+                            });
+                        });
+
+                    ui.add_space(12.0);
+
+                    // --- Card 2: Action Button ---
+                    let can_run = self.folder_path.is_some() && !self.is_processing;
+                    let action_label = if self.is_processing {
+                        "⚡ Parsing Resumes..."
+                    } else {
+                        "⚡ Run ATS Extraction"
+                    };
+
+                    let run_btn = egui::Button::new(
+                        RichText::new(action_label)
+                            .size(14.0)
+                            .strong()
+                            .color(Color32::WHITE),
+                    )
+                    .fill(if can_run { brand_accent } else { Color32::from_rgb(100, 116, 139) })
+                    .corner_radius(CornerRadius::same(8))
+                    .min_size(Vec2::new(ui.available_width(), 38.0));
+
+                    if ui.add_enabled(can_run, run_btn).clicked() {
+                        if let Some(ref path) = self.folder_path {
+                            self.is_processing = true;
+                            self.status_message = "Extracting text and matching fields...".to_string();
+
+                            match process_directory(path) {
+                                Ok((count, csv, excel)) => {
+                                    self.candidates_count = Some(count);
+                                    self.csv_file = Some(csv);
+                                    self.excel_file = Some(excel);
+                                    self.status_message = format!("Successfully parsed {} candidate profiles.", count);
+                                }
+                                Err(err) => {
+                                    self.status_message = format!("Error: {}", err);
+                                }
+                            }
+                            self.is_processing = false;
                         }
                     }
+
+                    ui.add_space(12.0);
+
+                    // --- Card 3: Status & Direct Report Launchers ---
+                    Frame::none()
+                        .fill(card_bg)
+                        .corner_radius(CornerRadius::same(10))
+                        .stroke(Stroke::new(1.0, card_border))
+                        .inner_margin(Margin::same(14.0))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("📋 Status & Export").size(13.0).strong());
+                            });
+                            ui.add_space(6.0);
+
+                            ui.label(
+                                RichText::new(&self.status_message)
+                                    .size(12.0)
+                                    .italics()
+                                    .color(if is_dark { Color32::LIGHT_GRAY } else { Color32::DARK_GRAY }),
+                            );
+
+                            if let Some(count) = self.candidates_count {
+                                ui.add_space(10.0);
+                                ui.label(
+                                    RichText::new(format!("✓ {} Candidates Synced", count))
+                                        .size(13.0)
+                                        .strong()
+                                        .color(Color32::from_rgb(34, 197, 94)),
+                                );
+
+                                ui.add_space(8.0);
+                                ui.horizontal_centered(|ui| {
+                                    if let Some(ref csv) = self.csv_file {
+                                        let csv_btn = egui::Button::new(RichText::new("📄 Open CSV").size(12.0).strong())
+                                            .corner_radius(CornerRadius::same(6))
+                                            .min_size(Vec2::new(140.0, 30.0));
+                                        if ui.add(csv_btn).clicked() {
+                                            let _ = open::that(csv);
+                                        }
+                                    }
+
+                                    if let Some(ref excel) = self.excel_file {
+                                        let xlsx_btn = egui::Button::new(RichText::new("📊 Open Excel").size(12.0).strong())
+                                            .corner_radius(CornerRadius::same(6))
+                                            .min_size(Vec2::new(140.0, 30.0));
+                                        if ui.add(xlsx_btn).clicked() {
+                                            let _ = open::that(excel);
+                                        }
+                                    }
+                                });
+                            }
+                        });
                 });
             });
-
-            ui.add_space(15.0);
-
-            ui.group(|ui| {
-                ui.heading("2. Synchronization Action");
-                ui.add_space(8.0);
-
-                let can_process = self.folder_path.is_some() && !self.is_processing;
-
-                if ui
-                    .add_enabled(
-                        can_process,
-                        egui::Button::new("⚡ Run ATS Sync Engine")
-                            .min_size(egui::vec2(220.0, 36.0)),
-                    )
-                    .clicked()
-                {
-                    if let Some(ref path) = self.folder_path {
-                        self.is_processing = true;
-                        self.status_message = "Parsing candidate documents...".to_string();
-
-                        match process_directory(path) {
-                            Ok((count, csv, excel)) => {
-                                self.candidates_count = Some(count);
-                                self.csv_file = Some(csv);
-                                self.excel_file = Some(excel);
-                                self.status_message = format!("Complete! Processed {} resumes.", count);
-                            }
-                            Err(err) => {
-                                self.status_message = format!("Error: {}", err);
-                            }
-                        }
-                        self.is_processing = false;
-                    }
-                }
-            });
-
-            ui.add_space(15.0);
-
-            ui.group(|ui| {
-                ui.heading("3. Output Status & Reports");
-                ui.add_space(5.0);
-
-                ui.label(
-                    egui::RichText::new(&self.status_message)
-                        .size(13.0)
-                        .italics(),
-                );
-
-                if let Some(count) = self.candidates_count {
-                    ui.add_space(8.0);
-                    ui.label(
-                        egui::RichText::new(format!("✓ {} Candidates Successfully Parsed", count))
-                            .strong()
-                            .color(egui::Color32::GREEN),
-                    );
-
-                    ui.add_space(5.0);
-                    ui.horizontal(|ui| {
-                        if let Some(ref csv) = self.csv_file {
-                            if ui.button("📄 Open CSV Spreadsheet").clicked() {
-                                let _ = open::that(csv);
-                            }
-                        }
-                        if let Some(ref excel) = self.excel_file {
-                            if ui.button("📊 Open Excel Report").clicked() {
-                                let _ = open::that(excel);
-                            }
-                        }
-                    });
-                }
-            });
-        });
     }
 }
