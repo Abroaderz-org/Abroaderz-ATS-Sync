@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, CornerRadius, Frame, Margin, RichText, Stroke, Vec2};
+use eframe::egui::{self, Color32, Frame, Margin, RichText, Rounding, Stroke, Vec2};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -81,12 +81,19 @@ impl Default for AtsSyncApp {
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Sync theme visuals
         if self.dark_mode {
             ctx.set_visuals(egui::Visuals::dark());
         } else {
             ctx.set_visuals(egui::Visuals::light());
         }
+
+        // Global rounded styling for interactive widgets
+        let mut style = (*ctx.style()).clone();
+        style.visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
+        style.visuals.widgets.inactive.rounding = Rounding::same(6.0);
+        style.visuals.widgets.hovered.rounding = Rounding::same(6.0);
+        style.visuals.widgets.active.rounding = Rounding::same(6.0);
+        ctx.set_style(style);
 
         let is_dark = self.dark_mode;
         let card_bg = if is_dark {
@@ -99,8 +106,7 @@ impl eframe::App for AtsSyncApp {
         } else {
             Color32::from_rgb(226, 232, 240)
         };
-        let brand_accent = Color32::from_rgb(14, 165, 233); // Sky blue
-        let brand_accent_hover = Color32::from_rgb(2, 132, 199);
+        let brand_accent = Color32::from_rgb(14, 165, 233);
 
         egui::CentralPanel::default()
             .frame(Frame::none().inner_margin(Margin::same(20.0)))
@@ -127,7 +133,6 @@ impl eframe::App for AtsSyncApp {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let theme_icon = if self.dark_mode { "☀️" } else { "🌙" };
                             let theme_btn = egui::Button::new(RichText::new(theme_icon).size(14.0))
-                                .corner_radius(CornerRadius::same(16))
                                 .min_size(Vec2::new(32.0, 32.0));
 
                             if ui.add(theme_btn).clicked() {
@@ -141,8 +146,8 @@ impl eframe::App for AtsSyncApp {
                     // --- Card 1: Folder Selection ---
                     Frame::none()
                         .fill(card_bg)
-                        .corner_radius(CornerRadius::same(10))
-                        .stroke(Stroke::new(1.0, card_border))
+                        .rounding(Rounding::same(10.0))
+                        .stroke(Stroke::new(1.0_f32, card_border))
                         .inner_margin(Margin::same(14.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -160,12 +165,10 @@ impl eframe::App for AtsSyncApp {
                                 ui.add(
                                     egui::TextEdit::singleline(&mut path_display)
                                         .desired_width(385.0)
-                                        .corner_radius(CornerRadius::same(6))
                                         .interactive(false),
                                 );
 
                                 let browse_btn = egui::Button::new(RichText::new("Browse").size(12.0).strong())
-                                    .corner_radius(CornerRadius::same(6))
                                     .min_size(Vec2::new(75.0, 26.0));
 
                                 if ui.add(browse_btn).clicked() {
@@ -194,7 +197,6 @@ impl eframe::App for AtsSyncApp {
                             .color(Color32::WHITE),
                     )
                     .fill(if can_run { brand_accent } else { Color32::from_rgb(100, 116, 139) })
-                    .corner_radius(CornerRadius::same(8))
                     .min_size(Vec2::new(ui.available_width(), 38.0));
 
                     if ui.add_enabled(can_run, run_btn).clicked() {
@@ -222,8 +224,8 @@ impl eframe::App for AtsSyncApp {
                     // --- Card 3: Status & Direct Report Launchers ---
                     Frame::none()
                         .fill(card_bg)
-                        .corner_radius(CornerRadius::same(10))
-                        .stroke(Stroke::new(1.0, card_border))
+                        .rounding(Rounding::same(10.0))
+                        .stroke(Stroke::new(1.0_f32, card_border))
                         .inner_margin(Margin::same(14.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -251,7 +253,6 @@ impl eframe::App for AtsSyncApp {
                                 ui.horizontal_centered(|ui| {
                                     if let Some(ref csv) = self.csv_file {
                                         let csv_btn = egui::Button::new(RichText::new("📄 Open CSV").size(12.0).strong())
-                                            .corner_radius(CornerRadius::same(6))
                                             .min_size(Vec2::new(140.0, 30.0));
                                         if ui.add(csv_btn).clicked() {
                                             let _ = open::that(csv);
@@ -260,7 +261,6 @@ impl eframe::App for AtsSyncApp {
 
                                     if let Some(ref excel) = self.excel_file {
                                         let xlsx_btn = egui::Button::new(RichText::new("📊 Open Excel").size(12.0).strong())
-                                            .corner_radius(CornerRadius::same(6))
                                             .min_size(Vec2::new(140.0, 30.0));
                                         if ui.add(xlsx_btn).clicked() {
                                             let _ = open::that(excel);
