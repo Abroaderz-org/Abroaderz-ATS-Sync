@@ -59,7 +59,6 @@ pub struct AtsSyncApp {
     candidates_count: Option<usize>,
     csv_file: Option<String>,
     excel_file: Option<String>,
-    is_processing: bool,
     dark_mode: bool,
 }
 
@@ -73,7 +72,6 @@ impl Default for AtsSyncApp {
             candidates_count: None,
             csv_file: None,
             excel_file: None,
-            is_processing: false,
             dark_mode: true,
         }
     }
@@ -183,15 +181,9 @@ impl eframe::App for AtsSyncApp {
                     ui.add_space(12.0);
 
                     // --- Card 2: Action Button ---
-                    let can_run = self.folder_path.is_some() && !self.is_processing;
-                    let action_label = if self.is_processing {
-                        "⚡ Parsing Resumes..."
-                    } else {
-                        "⚡ Run ATS Extraction"
-                    };
-
+                    let can_run = self.folder_path.is_some();
                     let run_btn = egui::Button::new(
-                        RichText::new(action_label)
+                        RichText::new("⚡ Run ATS Extraction")
                             .size(14.0)
                             .strong()
                             .color(Color32::WHITE),
@@ -201,9 +193,6 @@ impl eframe::App for AtsSyncApp {
 
                     if ui.add_enabled(can_run, run_btn).clicked() {
                         if let Some(ref path) = self.folder_path {
-                            self.is_processing = true;
-                            self.status_message = "Extracting text and matching fields...".to_string();
-
                             match process_directory(path) {
                                 Ok((count, csv, excel)) => {
                                     self.candidates_count = Some(count);
@@ -215,7 +204,6 @@ impl eframe::App for AtsSyncApp {
                                     self.status_message = format!("Error: {}", err);
                                 }
                             }
-                            self.is_processing = false;
                         }
                     }
 
