@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 use crate::config::AppConfig;
 use crate::engine::inference::infer_candidate_details;
 use crate::export::{csv::export_candidates_to_csv, excel::export_candidates_to_excel};
-use crate::parser::{image::extract_image_text, pdf::extract_pdf_text};
+use crate::parser::{docx::extract_docx_text, image::extract_image_text, pdf::extract_pdf_text};
 
 fn process_directory(dir_path: &Path) -> Result<(usize, String, String), String> {
     let mut candidates = Vec::new();
@@ -21,6 +21,7 @@ fn process_directory(dir_path: &Path) -> Result<(usize, String, String), String>
 
             let raw_text = match ext.as_str() {
                 "pdf" => extract_pdf_text(path).ok(),
+                "docx" => extract_docx_text(path).ok(),
                 "png" | "jpg" | "jpeg" | "webp" => extract_image_text(path).ok(),
                 _ => None,
             };
@@ -37,7 +38,7 @@ fn process_directory(dir_path: &Path) -> Result<(usize, String, String), String>
     }
 
     if candidates.is_empty() {
-        return Err("No valid PDF or image resumes found in the chosen folder.".to_string());
+        return Err("No valid PDF, DOCX, or image resumes found in the chosen folder.".to_string());
     }
 
     let count = candidates.len();

@@ -42,6 +42,9 @@ pub fn export_candidates_to_excel(
         worksheet.write(row, 13, c.score.as_deref().unwrap_or("N/A"))?;
     }
 
+    // Auto-fit column widths so long text isn't cut off
+    worksheet.autofit();
+
     workbook.save(output_path)?;
     Ok(())
 }
