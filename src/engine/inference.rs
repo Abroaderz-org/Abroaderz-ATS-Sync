@@ -1,6 +1,5 @@
 use crate::engine::schema::CandidateRecord;
 use regex::Regex;
-use strsim::jaro_winkler;
 
 pub fn infer_candidate_details(raw_text: &str, file_name: &str) -> CandidateRecord {
     let mut record = CandidateRecord::default();
