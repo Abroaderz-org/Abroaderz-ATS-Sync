@@ -7,10 +7,21 @@ pub fn export_candidates_to_csv(
 ) -> Result<(), Box<dyn Error>> {
     let mut wtr = csv::Writer::from_path(output_path)?;
 
-    wtr.write_record([
-        "Sno", "Name", "Passport No", "Position", "Education", "DOB",
-        "Phone", "Email", "Local Exp", "Overseas Exp", "Total Exp",
-        "State", "Country",
+    wtr.write_record(&[
+        "S.No",
+        "Candidate Name",
+        "Passport No",
+        "Position / Trade",
+        "Education / Degree",
+        "Date of Birth",
+        "Phone Number",
+        "Email Address",
+        "Local Exp (Yrs)",
+        "Overseas Exp (Yrs)",
+        "Total Exp (Yrs)",
+        "Match Score (%)",
+        "State",
+        "Country",
     ])?;
 
     for (idx, c) in candidates.iter().enumerate() {
@@ -23,9 +34,10 @@ pub fn export_candidates_to_csv(
             c.dob.clone(),
             c.phone.clone(),
             c.email.clone(),
-            c.local_experience.clone(),
-            c.overseas_experience.clone(),
-            c.total_experience.clone(),
+            format!("{:.1}", c.local_exp_years),
+            format!("{:.1}", c.overseas_exp_years),
+            format!("{:.1}", c.total_exp_years),
+            format!("{:.1}", c.match_score),
             c.state.clone(),
             c.country.clone(),
         ])?;

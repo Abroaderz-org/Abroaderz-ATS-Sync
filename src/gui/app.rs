@@ -18,6 +18,7 @@ pub enum ExportFormat {
 fn process_directory(
     dir_path: &Path,
     format: ExportFormat,
+    jd_text: &str,
 ) -> Result<(usize, Option<String>, Option<String>), String> {
     let mut candidates = Vec::new();
 
@@ -30,6 +31,7 @@ fn process_directory(
                 .unwrap_or("")
                 .to_lowercase();
 
+            // Safe parsing per format
             let raw_text = match ext.as_str() {
                 "pdf" => extract_pdf_text(path).ok(),
                 "docx" => extract_docx_text(path).ok(),
@@ -42,7 +44,7 @@ fn process_directory(
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("Unknown");
-                let candidate = infer_candidate_details(&text, file_name);
+                let candidate = infer_candidate_details(&text, file_name, jd_text);
                 candidates.push(candidate);
             }
         }
@@ -51,6 +53,13 @@ fn process_directory(
     if candidates.is_empty() {
         return Err("No valid PDF, DOCX, or image resumes found in the chosen folder.".to_string());
     }
+
+    // Sort candidates descending by match score
+    candidates.sort_by(|a, b| {
+        let score_a: f32 = a.match_score.parse().unwrap_or(0.0);
+        let score_b: f32 = b.match_score.parse().unwrap_or(0.0);
+        score_b.partial_cmp(&score_a).unwrap()
+    });
 
     let count = candidates.len();
     let mut generated_csv = None;
@@ -88,6 +97,7 @@ fn process_directory(
 
 pub struct AtsSyncApp {
     folder_path: Option<PathBuf>,
+    jd_input: String,
     status_message: String,
     candidates_count: Option<usize>,
     csv_file: Option<String>,
@@ -103,6 +113,7 @@ impl Default for AtsSyncApp {
 
         Self {
             folder_path: initial_path,
+            jd_input: "Mechanical Supervisor Static Equipment Shutdown Refinery Aramco Sabic".to_string(),
             status_message: "Ready. Select a folder to begin extraction.".to_string(),
             candidates_count: None,
             csv_file: None,
@@ -115,7 +126,6 @@ impl Default for AtsSyncApp {
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Native 1:1 pixel scaling for sharp font rendering
         let visuals = if self.dark_mode {
             egui::Visuals::dark()
         } else {
@@ -144,17 +154,17 @@ impl eframe::App for AtsSyncApp {
         ctx.set_style(style);
 
         egui::CentralPanel::default()
-            .frame(Frame::central_panel(&ctx.style()).inner_margin(Margin::symmetric(24.0, 14.0)))
+            .frame(Frame::central_panel(&ctx.style()).inner_margin(Margin::symmetric(20.0, 8.0)))
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.set_max_width(520.0);
 
-                    // --- Top Utility Row: Theme Switcher Pinned to Top-Right ---
+                    // --- Top Utility Row ---
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let theme_label = if self.dark_mode { "Light Mode" } else { "Dark Mode" };
-                            let theme_btn = egui::Button::new(RichText::new(theme_label).size(11.0).strong())
-                                .min_size(Vec2::new(82.0, 22.0));
+                            let theme_btn = egui::Button::new(RichText::new(theme_label).size(10.5).strong())
+                                .min_size(Vec2::new(80.0, 22.0));
 
                             if ui.add(theme_btn).clicked() {
                                 self.dark_mode = !self.dark_mode;
@@ -164,17 +174,17 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(2.0);
 
-                    // --- Clean Centered Branding ---
+                    // --- Branding ---
                     ui.label(
                         RichText::new("ABROADERZ ATS SYNC")
-                            .font(FontId::new(19.0, FontFamily::Proportional))
+                            .font(FontId::new(18.0, FontFamily::Proportional))
                             .strong()
                             .color(brand_accent),
                     );
 
                     ui.label(
                         RichText::new("Automated Neural Resume Pipeline")
-                            .font(FontId::new(11.0, FontFamily::Proportional))
+                            .font(FontId::new(10.5, FontFamily::Proportional))
                             .color(if is_dark {
                                 Color32::from_rgb(148, 163, 184)
                             } else {
@@ -182,24 +192,20 @@ impl eframe::App for AtsSyncApp {
                             }),
                     );
 
-                    ui.add_space(10.0);
+                    ui.add_space(6.0);
 
-                    // --- Card 1: Directory Selection ---
+                    // --- Card 1: Directory Selection & JD Input ---
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(8.0))
                         .stroke(Stroke::new(1.0_f32, card_border))
-                        .inner_margin(Margin::symmetric(12.0, 8.0))
+                        .inner_margin(Margin::symmetric(10.0, 6.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new("Source Directory:")
-                                        .font(FontId::new(11.5, FontFamily::Proportional))
-                                        .strong(),
-                                );
+                                ui.label(RichText::new("Source Directory:").size(11.0).strong());
                             });
 
-                            ui.add_space(4.0);
+                            ui.add_space(2.0);
 
                             ui.horizontal(|ui| {
                                 let mut path_display = self
@@ -211,14 +217,12 @@ impl eframe::App for AtsSyncApp {
                                 ui.add(
                                     egui::TextEdit::singleline(&mut path_display)
                                         .desired_width(395.0)
-                                        .margin(Margin::symmetric(6.0, 4.0))
+                                        .margin(Margin::symmetric(6.0, 3.0))
                                         .interactive(false),
                                 );
 
-                                let browse_btn = egui::Button::new(
-                                    RichText::new("Browse").size(11.0).strong(),
-                                )
-                                .min_size(Vec2::new(72.0, 24.0));
+                                let browse_btn = egui::Button::new(RichText::new("Browse").size(10.5).strong())
+                                    .min_size(Vec2::new(72.0, 22.0));
 
                                 if ui.add(browse_btn).clicked() {
                                     if let Some(folder) = rfd::FileDialog::new().pick_folder() {
@@ -228,46 +232,48 @@ impl eframe::App for AtsSyncApp {
                                     }
                                 }
                             });
+
+                            ui.add_space(4.0);
+
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("Job Description Match Query:").size(10.5).strong());
+                            });
+                            ui.add_space(1.0);
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.jd_input)
+                                    .desired_width(470.0)
+                                    .margin(Margin::symmetric(6.0, 3.0)),
+                            );
                         });
 
-                    ui.add_space(8.0);
+                    ui.add_space(6.0);
 
-                    // --- Card 2: Export Selection & Execution Button ---
+                    // --- Card 2: Export Options & Execution Trigger ---
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(8.0))
                         .stroke(Stroke::new(1.0_f32, card_border))
-                        .inner_margin(Margin::symmetric(12.0, 8.0))
+                        .inner_margin(Margin::symmetric(10.0, 6.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new("Export Format:")
-                                        .font(FontId::new(11.5, FontFamily::Proportional))
-                                        .strong(),
-                                );
+                                ui.label(RichText::new("Export Format:").size(11.0).strong());
                                 ui.add_space(6.0);
                                 ui.radio_value(&mut self.export_format, ExportFormat::Excel, "Excel (.xlsx)");
-                                ui.add_space(4.0);
                                 ui.radio_value(&mut self.export_format, ExportFormat::Csv, "CSV (.csv)");
-                                ui.add_space(4.0);
                                 ui.radio_value(&mut self.export_format, ExportFormat::Both, "Both");
                             });
 
-                            ui.add_space(8.0);
+                            ui.add_space(6.0);
 
                             let can_run = self.folder_path.is_some();
                             let run_btn = egui::Button::new(
-                                RichText::new("Run ATS Extraction")
-                                    .font(FontId::new(12.5, FontFamily::Proportional))
+                                RichText::new("RUN ATS EXTRACTION & RANKING")
+                                    .font(FontId::new(12.0, FontFamily::Proportional))
                                     .strong()
                                     .color(Color32::WHITE),
                             )
-                            .fill(if can_run {
-                                brand_accent
-                            } else {
-                                Color32::from_rgb(100, 116, 139)
-                            })
-                            .min_size(Vec2::new(ui.available_width(), 34.0));
+                            .fill(if can_run { brand_accent } else { Color32::from_rgb(100, 116, 139) })
+                            .min_size(Vec2::new(ui.available_width(), 30.0));
 
                             let response = ui.add_enabled(can_run, run_btn);
 
@@ -280,13 +286,13 @@ impl eframe::App for AtsSyncApp {
                                     self.csv_file = None;
                                     self.excel_file = None;
 
-                                    match process_directory(path, self.export_format) {
+                                    match process_directory(path, self.export_format, &self.jd_input) {
                                         Ok((count, csv, excel)) => {
                                             self.candidates_count = Some(count);
                                             self.csv_file = csv;
                                             self.excel_file = excel;
                                             self.status_message = format!(
-                                                "Pipeline completed. {} records processed.",
+                                                "Pipeline completed. {} profiles ranked and exported.",
                                                 count
                                             );
                                         }
@@ -298,28 +304,24 @@ impl eframe::App for AtsSyncApp {
                             }
                         });
 
-                    ui.add_space(8.0);
+                    ui.add_space(6.0);
 
-                    // --- Card 3: Status & File Actions ---
+                    // --- Card 3: Results & Actions ---
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(8.0))
                         .stroke(Stroke::new(1.0_f32, card_border))
-                        .inner_margin(Margin::symmetric(12.0, 8.0))
+                        .inner_margin(Margin::symmetric(10.0, 6.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new("Status & Results")
-                                        .font(FontId::new(11.5, FontFamily::Proportional))
-                                        .strong(),
-                                );
+                                ui.label(RichText::new("Status & Results").size(11.0).strong());
                             });
 
                             ui.add_space(2.0);
 
                             ui.label(
                                 RichText::new(&self.status_message)
-                                    .font(FontId::new(11.0, FontFamily::Proportional))
+                                    .font(FontId::new(10.5, FontFamily::Proportional))
                                     .italics()
                                     .color(if is_dark {
                                         Color32::from_rgb(148, 163, 184)
@@ -332,19 +334,19 @@ impl eframe::App for AtsSyncApp {
                                 ui.add_space(4.0);
 
                                 ui.label(
-                                    RichText::new(format!("[SUCCESS] {} Candidate Profiles Synced", count))
-                                        .font(FontId::new(11.5, FontFamily::Proportional))
+                                    RichText::new(format!("[SUCCESS] {} Candidates Synchronized & Scored", count))
+                                        .font(FontId::new(11.0, FontFamily::Proportional))
                                         .strong()
                                         .color(Color32::from_rgb(34, 197, 94)),
                                 );
 
-                                ui.add_space(6.0);
+                                ui.add_space(4.0);
                                 ui.horizontal_centered(|ui| {
                                     if let Some(ref excel) = self.excel_file {
                                         let xlsx_btn = egui::Button::new(
-                                            RichText::new("Open Excel").size(11.0).strong(),
+                                            RichText::new("Open Excel").size(10.5).strong(),
                                         )
-                                        .min_size(Vec2::new(115.0, 26.0));
+                                        .min_size(Vec2::new(110.0, 24.0));
                                         if ui.add(xlsx_btn).clicked() {
                                             let _ = open::that(excel);
                                         }
@@ -352,9 +354,9 @@ impl eframe::App for AtsSyncApp {
 
                                     if let Some(ref csv) = self.csv_file {
                                         let csv_btn = egui::Button::new(
-                                            RichText::new("Open CSV").size(11.0).strong(),
+                                            RichText::new("Open CSV").size(10.5).strong(),
                                         )
-                                        .min_size(Vec2::new(115.0, 26.0));
+                                        .min_size(Vec2::new(110.0, 24.0));
                                         if ui.add(csv_btn).clicked() {
                                             let _ = open::that(csv);
                                         }
