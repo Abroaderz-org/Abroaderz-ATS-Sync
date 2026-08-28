@@ -4,7 +4,7 @@ use regex::Regex;
 pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> CandidateRecord {
     let clean_text = text.replace('\r', "\n");
 
-    // 1. Candidate Name Extraction
+    // 1. Candidate Name
     let name = extract_candidate_name(&clean_text).unwrap_or_else(|| clean_fallback_filename(file_name));
 
     // 2. Passport Number
@@ -30,17 +30,17 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
     // 6. Phone Number (Guaranteed +91 Prefix)
     let phone = extract_phone(&clean_text);
 
-    // 7. Email Address (Sanitized)
+    // 7. Email Address
     let email = extract_email(&clean_text);
 
     // 8. Experience Breakdown (Numeric Years)
     let (local_experience, overseas_experience) = extract_experience_years(&clean_text);
     let total_experience = local_experience + overseas_experience;
 
-    // 9. Location (State & Country)
+    // 9. Location
     let (state, country) = extract_location(&clean_text);
 
-    // 10. Match Score (Appended only when JD text exists)
+    // 10. Match Score
     let match_score = if !jd_text.trim().is_empty() {
         Some(calculate_jd_score(&clean_text, &position, total_experience, jd_text))
     } else {
@@ -65,8 +65,8 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
 }
 
 fn extract_candidate_name(text: &str) -> Option<String> {
-    // 1. Check explicit name tags (skipping Father's name tags)
-    let name_tag_re = Regex::new(r"(?im)^\s*(?:Candidate\s*Name|Name|Full\s*Name)\s*[:\-\.]\s*([A-Za-z\s\.]{3,35})$").unwrap();
+    // 1. Explicit Candidate Header
+    let name_tag_re = Regex::new(r"(?im)^\s*(?:Candidate\s*Name|Full\s*Name|Name)\s*[:\-\.]\s*([A-Za-z\s\.]{3,35})$").unwrap();
     for cap in name_tag_re.captures_iter(text) {
         let n = cap[1].trim();
         let nl = n.to_lowercase();
@@ -75,16 +75,33 @@ fn extract_candidate_name(text: &str) -> Option<String> {
         }
     }
 
-    // 2. Inspect top 20 lines for bold title/uppercase header names
-    let lines: Vec<&str> = text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).take(20).collect();
+    // 2. Top-of-resume standalone name evaluation (pages 1-2 header)
+    let lines: Vec<&str> = text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).take(25).collect();
     for line in &lines {
         let l_lower = line.to_lowercase();
-        if l_lower.contains("father") || l_lower.contains("resume") || l_lower.contains("curriculum") || l_lower.contains("profile") || l_lower.contains("page ") || l_lower.contains("personal") {
+        if l_lower.contains("father") 
+            || l_lower.contains("stream") 
+            || l_lower.contains("endstream")
+            || l_lower.contains("resume") 
+            || l_lower.contains("curriculum") 
+            || l_lower.contains("profile") 
+            || l_lower.contains("page ") 
+            || l_lower.contains("personal")
+            || l_lower.contains("career")
+            || l_lower.contains("contact")
+        {
             continue;
         }
 
+        // Must be alphabetic name line with 2 to 4 words
         if line.len() >= 3 && line.len() <= 32 && line.chars().all(|c| c.is_alphabetic() || c.is_whitespace() || c == '.') {
-            if !l_lower.contains("supervisor") && !l_lower.contains("engineer") && !l_lower.contains("technician") && !l_lower.contains("foreman") && !l_lower.contains("fitter") && !l_lower.contains("diploma") {
+            if !l_lower.contains("supervisor") 
+                && !l_lower.contains("engineer") 
+                && !l_lower.contains("technician") 
+                && !l_lower.contains("foreman") 
+                && !l_lower.contains("fitter") 
+                && !l_lower.contains("diploma") 
+            {
                 return Some(clean_name_string(line));
             }
         }
@@ -112,7 +129,7 @@ fn clean_fallback_filename(file_name: &str) -> String {
         .trim()
         .to_string();
 
-    if clean.to_lowercase().contains("mechanical") || clean.to_lowercase().contains("supervisor") {
+    if clean.to_lowercase().contains("mechanical") || clean.to_lowercase().contains("supervisor") || clean.to_lowercase().contains("document") {
         "Candidate (Check CV)".to_string()
     } else {
         clean
@@ -138,11 +155,11 @@ fn month_name_to_num(month_str: &str) -> Option<&'static str> {
 }
 
 fn extract_dob(text: &str) -> String {
-    let dob_re = Regex::new(r"(?im)(?:DOB|Date\s+of\s+Birth|Birth\s*Date)\s*[:\-\.]\s*([0-9]{1,2}[\s\-/.][A-Za-z0-9]{2,9}[\s\-/.][0-9]{4})").unwrap();
+    // Robust multi-line/spaced colon DOB capture
+    let dob_re = Regex::new(r"(?im)(?:DOB|Date\s+of\s+Birth|Birth\s*Date)[\s:\-\.]*([0-9]{1,2}[\s\-/.][A-Za-z0-9]{2,9}[\s\-/.][0-9]{4})").unwrap();
     if let Some(c) = dob_re.captures(text) {
         let clean = c[1].trim();
 
-        // Pattern 1: Numeric DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
         let num_re = Regex::new(r"^([0-9]{1,2})[\/\.\-]([0-9]{1,2})[\/\.\-]([0-9]{4})$").unwrap();
         if let Some(caps) = num_re.captures(clean) {
             let day = format!("{:0>2}", &caps[1]);
@@ -151,7 +168,6 @@ fn extract_dob(text: &str) -> String {
             return format!("{}/{}/{}", day, month, year);
         }
 
-        // Pattern 2: Textual month "03 Nov 2001", "3rd November 2001"
         let word_re = Regex::new(r"(?i)^([0-9]{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([A-Za-z]{3,9})[\s\-\/\.]([0-9]{4})$").unwrap();
         if let Some(caps) = word_re.captures(clean) {
             let day = format!("{:0>2}", &caps[1]);
@@ -214,7 +230,7 @@ fn extract_education(text: &str) -> String {
     let lower = text.to_lowercase();
     if lower.contains("diploma in mechanical") || lower.contains("dme") {
         "Diploma in Mechanical Engineering".to_string()
-    } else if lower.contains("diploma in electrical") || lower.contains("diploma\n(electrical)") || lower.contains("electrical and electronics") {
+    } else if lower.contains("diploma in electrical") || lower.contains("electrical and electronics") {
         "Diploma in Electrical and Electronics Engineering".to_string()
     } else if lower.contains("chemical engineering") {
         "Diploma in Chemical Engineering".to_string()
