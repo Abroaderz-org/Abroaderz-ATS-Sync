@@ -27,22 +27,15 @@ jobs:
             binary_name: abroaderz-ats-sync.exe
             asset_name: Abroaderz-ATS-Sync-Windows-x64.zip
 
-          - name: macOS Apple Silicon (M-Series)
-            os: macos-latest
-            target: aarch64-apple-darwin
-            binary_name: abroaderz-ats-sync
-            asset_name: Abroaderz-ATS-Sync-macOS-ARM64.tar.gz
-
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform.target }}
 
-      # Global Rust compiler caching
       - name: Rust Cache Action
         uses: Swatinem/rust-cache@v2
         with:
@@ -56,15 +49,8 @@ jobs:
         run: |
           7z a -tzip "${{ matrix.platform.asset_name }}" "./target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary_name }}"
 
-      - name: Package macOS Binary
-        if: runner.os == 'macOS'
-        run: |
-          cd target/${{ matrix.platform.target }}/release/
-          tar -czf "../../../${{ matrix.platform.asset_name }}" "${{ matrix.platform.binary_name }}"
-          cd ../../../
-
       - name: Upload Binary Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform.name }}
           path: ${{ matrix.platform.asset_name }}
@@ -81,7 +67,7 @@ jobs:
           merge-multiple: true
 
       - name: Publish to Latest Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: "Latest Continuous Build"
