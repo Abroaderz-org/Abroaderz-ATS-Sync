@@ -1,5 +1,5 @@
 use eframe::egui::{
-    self, Color32, FontFamily, FontId, Frame, Margin, Pos2, Rect, RichText, Rounding, Stroke, Vec2,
+    self, Color32, FontFamily, FontId, Frame, Margin, Pos2, RichText, Rounding, Stroke, Vec2,
 };
 use std::fs;
 use std::panic;
