@@ -116,26 +116,18 @@ fn run_pipeline_worker(
     }
 
     let count = candidates.len();
-    let mut generated_csv = None;
-    let mut generated_excel = None;
 
     let res = match format {
         ExportFormat::Excel => {
             let excel_path = "Abroaderz_Candidates.xlsx".to_string();
             export_candidates_to_excel(&candidates, &excel_path)
-                .map(|_| {
-                    generated_excel = Some(excel_path);
-                    (count, generated_csv, generated_excel)
-                })
+                .map(|_| (count, None, Some(excel_path)))
                 .map_err(|e| format!("Excel export failed: {}", e))
         }
         ExportFormat::Csv => {
             let csv_path = "Abroaderz_Candidates.csv".to_string();
             export_candidates_to_csv(&candidates, &csv_path)
-                .map(|_| {
-                    generated_csv = Some(csv_path);
-                    (count, generated_csv, generated_excel)
-                })
+                .map(|_| (count, Some(csv_path), None))
                 .map_err(|e| format!("CSV export failed: {}", e))
         }
         ExportFormat::Both => {
@@ -147,9 +139,7 @@ fn run_pipeline_worker(
             } else if let Err(e) = export_candidates_to_csv(&candidates, &csv_path) {
                 Err(format!("CSV export failed: {}", e))
             } else {
-                generated_excel = Some(excel_path);
-                generated_csv = Some(csv_path);
-                Ok((count, generated_csv, generated_excel))
+                Ok((count, Some(csv_path), Some(excel_path)))
             }
         }
     };
