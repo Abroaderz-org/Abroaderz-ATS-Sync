@@ -15,8 +15,6 @@ fn main() -> eframe::Result<()> {
             .with_min_inner_size([640.0, 500.0])
             .with_resizable(true)
             .with_title("Abroaderz ATS Sync"),
-        follow_system_theme: false,
-        default_theme: eframe::Theme::Dark,
         ..Default::default()
     };
 
