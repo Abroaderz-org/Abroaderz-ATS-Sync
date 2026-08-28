@@ -142,14 +142,15 @@ fn run_pipeline_worker(
             let excel_path = "Abroaderz_Candidates.xlsx".to_string();
             let csv_path = "Abroaderz_Candidates.csv".to_string();
 
-            export_candidates_to_excel(&candidates, &excel_path)
-                .and_then(|_| export_candidates_to_csv(&candidates, &csv_path).map_err(|e| e.to_string().into()))
-                .map(|_| {
-                    generated_excel = Some(excel_path);
-                    generated_csv = Some(csv_path);
-                    (count, generated_csv, generated_excel)
-                })
-                .map_err(|e| format!("Export failed: {}", e))
+            if let Err(e) = export_candidates_to_excel(&candidates, &excel_path) {
+                Err(format!("Excel export failed: {}", e))
+            } else if let Err(e) = export_candidates_to_csv(&candidates, &csv_path) {
+                Err(format!("CSV export failed: {}", e))
+            } else {
+                generated_excel = Some(excel_path);
+                generated_csv = Some(csv_path);
+                Ok((count, generated_csv, generated_excel))
+            }
         }
     };
 
@@ -191,7 +192,6 @@ impl Default for AtsSyncApp {
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Poll async background pipeline
         if let Some(ref rx) = self.rx {
             while let Ok(msg) = rx.try_recv() {
                 match msg {
@@ -339,7 +339,7 @@ impl eframe::App for AtsSyncApp {
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
-                        .stroke(Stroke::new(1.0, card_border))
+                        .stroke(Stroke::new(1.0_f32, card_border))
                         .inner_margin(Margin::symmetric(14.0, 10.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -420,7 +420,7 @@ impl eframe::App for AtsSyncApp {
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
-                        .stroke(Stroke::new(1.0, card_border))
+                        .stroke(Stroke::new(1.0_f32, card_border))
                         .inner_margin(Margin::symmetric(14.0, 10.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -477,7 +477,7 @@ impl eframe::App for AtsSyncApp {
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
-                        .stroke(Stroke::new(1.0, card_border))
+                        .stroke(Stroke::new(1.0_f32, card_border))
                         .inner_margin(Margin::symmetric(14.0, 10.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
