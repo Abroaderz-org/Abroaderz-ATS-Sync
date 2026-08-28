@@ -9,9 +9,18 @@ use eframe::egui;
 use gui::AtsSyncApp;
 
 fn main() -> eframe::Result<()> {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        #[link(name = "user32")]
+        extern "system" {
+            fn SetProcessDpiAwarenessContext(value: isize) -> i32;
+        }
+        let _ = SetProcessDpiAwarenessContext(-4);
+    }
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([700.0, 560.0])
+            .with_inner_size([720.0, 580.0])
             .with_min_inner_size([640.0, 500.0])
             .with_resizable(true)
             .with_title("Abroaderz ATS Sync"),
