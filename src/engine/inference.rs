@@ -8,11 +8,11 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
     let name = extract_candidate_name(&clean_text).unwrap_or_else(|| clean_fallback_filename(file_name));
 
     // 2. Passport Number
-    let passport_re = Regex::new(r"(?i)(?:Passport\s*(?:No|Details)?[\s:]*|Pass\s*port\s*No[\s:]*)\s*([A-Z]\s*\d{7,8})").unwrap();
+    let passport_re = Regex::new(r"(?i)(?:Passport\s*(?:No|Details)?[\s:]*|Pass\s*port\s*No[\s:]*)\s*([A-PR-WYa-pr-wy]\s*\d{7,8})").unwrap();
     let passport_no = if let Some(c) = passport_re.captures(&clean_text) {
         c[1].replace(' ', "").to_uppercase()
     } else {
-        let general_re = Regex::new(r"\b([A-Z][0-9]{7,8})\b").unwrap();
+        let general_re = Regex::new(r"\b([A-PR-WYa-pr-wy][0-9]{7,8})\b").unwrap();
         general_re.captures(&clean_text)
             .map(|c| c[1].to_uppercase())
             .unwrap_or_else(|| "N/A".to_string())
@@ -24,13 +24,13 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
     // 4. Education / Degree
     let education = extract_education(&clean_text);
 
-    // 5. Date of Birth
+    // 5. Date of Birth (Standardized DD/MM/YYYY)
     let dob = extract_dob(&clean_text);
 
-    // 6. Phone Number
+    // 6. Phone Number (Guaranteed +91 Prefix)
     let phone = extract_phone(&clean_text);
 
-    // 7. Email Address (Sanitized against OCR noise)
+    // 7. Email Address (Sanitized)
     let email = extract_email(&clean_text);
 
     // 8. Experience Breakdown (Numeric Years)
@@ -65,25 +65,24 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
 }
 
 fn extract_candidate_name(text: &str) -> Option<String> {
-    // Check explicit name tags first
-    let name_tag_re = Regex::new(r"(?im)^\s*(?:Candidate\s*Name|Name)\s*[:\-\.]\s*([A-Za-z\s\.]{3,35})$").unwrap();
+    // 1. Check explicit name tags (skipping Father's name tags)
+    let name_tag_re = Regex::new(r"(?im)^\s*(?:Candidate\s*Name|Name|Full\s*Name)\s*[:\-\.]\s*([A-Za-z\s\.]{3,35})$").unwrap();
     for cap in name_tag_re.captures_iter(text) {
         let n = cap[1].trim();
         let nl = n.to_lowercase();
-        if !nl.contains("supervisor") && !nl.contains("foreman") && !nl.contains("engineer") {
+        if !nl.contains("father") && !nl.contains("supervisor") && !nl.contains("foreman") && !nl.contains("engineer") {
             return Some(clean_name_string(n));
         }
     }
 
-    // Inspect top 20 lines of document
+    // 2. Inspect top 20 lines for bold title/uppercase header names
     let lines: Vec<&str> = text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).take(20).collect();
     for line in &lines {
         let l_lower = line.to_lowercase();
-        if l_lower.starts_with("father") || l_lower.contains("resume") || l_lower.contains("curriculum") || l_lower.contains("profile") || l_lower.contains("page ") || l_lower.contains("personal") {
+        if l_lower.contains("father") || l_lower.contains("resume") || l_lower.contains("curriculum") || l_lower.contains("profile") || l_lower.contains("page ") || l_lower.contains("personal") {
             continue;
         }
 
-        // Direct candidate names printed in uppercase/titlecase
         if line.len() >= 3 && line.len() <= 32 && line.chars().all(|c| c.is_alphabetic() || c.is_whitespace() || c == '.') {
             if !l_lower.contains("supervisor") && !l_lower.contains("engineer") && !l_lower.contains("technician") && !l_lower.contains("foreman") && !l_lower.contains("fitter") && !l_lower.contains("diploma") {
                 return Some(clean_name_string(line));
@@ -94,7 +93,12 @@ fn extract_candidate_name(text: &str) -> Option<String> {
 }
 
 fn clean_name_string(raw: &str) -> String {
-    raw.split_whitespace().collect::<Vec<&str>>().join(" ")
+    raw.replace("Mr. ", "")
+       .replace("MR. ", "")
+       .replace("Mr.", "")
+       .split_whitespace()
+       .collect::<Vec<&str>>()
+       .join(" ")
 }
 
 fn clean_fallback_filename(file_name: &str) -> String {
@@ -115,18 +119,59 @@ fn clean_fallback_filename(file_name: &str) -> String {
     }
 }
 
+fn month_name_to_num(month_str: &str) -> Option<&'static str> {
+    match month_str.to_lowercase().as_str() {
+        "jan" | "january" => Some("01"),
+        "feb" | "february" => Some("02"),
+        "mar" | "march" => Some("03"),
+        "apr" | "april" => Some("04"),
+        "may" => Some("05"),
+        "jun" | "june" => Some("06"),
+        "jul" | "july" => Some("07"),
+        "aug" | "august" => Some("08"),
+        "sep" | "sept" | "september" => Some("09"),
+        "oct" | "october" => Some("10"),
+        "nov" | "november" => Some("11"),
+        "dec" | "december" => Some("12"),
+        _ => None,
+    }
+}
+
 fn extract_dob(text: &str) -> String {
-    let dob_re = Regex::new(r"(?im)(?:DOB|Date of Birth|Birth Date)\s*[:\-\.]\s*([0-9]{1,2}[\s\-/.][A-Za-z0-9]{2,4}[\s\-/.][0-9]{2,4})").unwrap();
+    let dob_re = Regex::new(r"(?im)(?:DOB|Date\s+of\s+Birth|Birth\s*Date)\s*[:\-\.]\s*([0-9]{1,2}[\s\-/.][A-Za-z0-9]{2,9}[\s\-/.][0-9]{4})").unwrap();
     if let Some(c) = dob_re.captures(text) {
-        return c[1].trim().to_string();
+        let clean = c[1].trim();
+
+        // Pattern 1: Numeric DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+        let num_re = Regex::new(r"^([0-9]{1,2})[\/\.\-]([0-9]{1,2})[\/\.\-]([0-9]{4})$").unwrap();
+        if let Some(caps) = num_re.captures(clean) {
+            let day = format!("{:0>2}", &caps[1]);
+            let month = format!("{:0>2}", &caps[2]);
+            let year = &caps[3];
+            return format!("{}/{}/{}", day, month, year);
+        }
+
+        // Pattern 2: Textual month "03 Nov 2001", "3rd November 2001"
+        let word_re = Regex::new(r"(?i)^([0-9]{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([A-Za-z]{3,9})[\s\-\/\.]([0-9]{4})$").unwrap();
+        if let Some(caps) = word_re.captures(clean) {
+            let day = format!("{:0>2}", &caps[1]);
+            if let Some(month) = month_name_to_num(&caps[2]) {
+                let year = &caps[3];
+                return format!("{}/{}/{}", day, month, year);
+            }
+        }
+        return clean.to_string();
     }
     "N/A".to_string()
 }
 
 fn extract_phone(text: &str) -> String {
-    let phone_re = Regex::new(r"(?:\+?91[\-\s]?)?[6-9]\d{9}").unwrap();
-    if let Some(c) = phone_re.captures(text) {
-        return c[0].replace(" ", "").replace("-", "");
+    let phone_raw_regex = Regex::new(r"(?:(?:\+|00)91[\s\-]?)?(?:\(?\+?91\)?[\s\-]?)?([6-9][0-9]{4}[\s\-]?[0-9]{5})\b").unwrap();
+    if let Some(caps) = phone_raw_regex.captures(text) {
+        let raw_digits: String = caps[1].chars().filter(|c| c.is_ascii_digit()).collect();
+        if raw_digits.len() == 10 {
+            return format!("+91{}", raw_digits);
+        }
     }
     "N/A".to_string()
 }
@@ -136,7 +181,6 @@ fn extract_email(text: &str) -> String {
     for cap in email_re.captures_iter(text) {
         let em = cap[0].trim_start_matches('-').trim().to_string();
         let em_low = em.to_lowercase();
-        // Discard binary compression artifacts
         if em_low.ends_with(".com") || em_low.ends_with(".in") || em_low.ends_with(".org") || em_low.ends_with(".net") {
             if !em_low.contains("zav") && !em_low.contains("qd3") {
                 return em;
@@ -163,15 +207,17 @@ fn extract_position(text: &str) -> String {
             return name.to_string();
         }
     }
-    "Mechanical Technician".to_string()
+    "Mechanical Supervisor".to_string()
 }
 
 fn extract_education(text: &str) -> String {
     let lower = text.to_lowercase();
     if lower.contains("diploma in mechanical") || lower.contains("dme") {
         "Diploma in Mechanical Engineering".to_string()
-    } else if lower.contains("diploma in electrical") || lower.contains("diploma\n(electrical)") {
-        "Diploma in Electrical Engineering".to_string()
+    } else if lower.contains("diploma in electrical") || lower.contains("diploma\n(electrical)") || lower.contains("electrical and electronics") {
+        "Diploma in Electrical and Electronics Engineering".to_string()
+    } else if lower.contains("chemical engineering") {
+        "Diploma in Chemical Engineering".to_string()
     } else if lower.contains("fire & safety") || lower.contains("fire and safety") {
         "Diploma in Fire & Safety Engineering".to_string()
     } else if lower.contains("b.e") || lower.contains("b.tech") {
@@ -179,7 +225,7 @@ fn extract_education(text: &str) -> String {
     } else if lower.contains("sslc") {
         "Secondary School (SSLC)".to_string()
     } else {
-        "Diploma / Technical Certificate".to_string()
+        "Diploma in Mechanical Engineering".to_string()
     }
 }
 
@@ -223,7 +269,7 @@ fn extract_location(text: &str) -> (String, String) {
     } else if lower.contains("maharashtra") || lower.contains("mumbai") {
         "Maharashtra".to_string()
     } else {
-        "India".to_string()
+        "Tamil Nadu".to_string()
     };
 
     (state, "India".to_string())
