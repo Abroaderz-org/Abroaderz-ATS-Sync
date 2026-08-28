@@ -7,7 +7,7 @@ pub fn export_candidates_to_csv(
 ) -> Result<(), Box<dyn Error>> {
     let mut wtr = csv::Writer::from_path(output_path)?;
 
-    let has_score = candidates.first().map_or(false, |c| c.match_score.is_some());
+    let has_score = candidates.iter().any(|c| c.match_score.is_some());
 
     let mut headers = vec![
         "S.No",
@@ -49,7 +49,7 @@ pub fn export_candidates_to_csv(
         ];
 
         if let Some(score) = c.match_score {
-            row.push(format!("{:.1}", score));
+            row.push(format!("{:.0}", score));
         }
 
         wtr.write_record(&row)?;

@@ -69,7 +69,6 @@ fn process_directory(
         return Err("No valid PDF or DOCX resumes found in chosen directory.".to_string());
     }
 
-    // Sort by Match Score if JD was supplied
     if !jd_text.trim().is_empty() {
         candidates.sort_by(|a, b| {
             let sa = a.match_score.unwrap_or(0.0);
@@ -143,7 +142,6 @@ impl Default for AtsSyncApp {
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // High-contrast clean text rendering
         let visuals = if self.dark_mode {
             egui::Visuals::dark()
         } else {
@@ -177,7 +175,7 @@ impl eframe::App for AtsSyncApp {
                 ui.vertical_centered(|ui| {
                     ui.set_max_width(530.0);
 
-                    // --- Top Theme Switcher Row ---
+                    // Top Theme Toggle
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let theme_label = if self.dark_mode { "Light Mode" } else { "Dark Mode" };
@@ -192,7 +190,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(2.0);
 
-                    // --- Header Branding ---
+                    // Header Branding
                     ui.label(
                         RichText::new("ABROADERZ ATS SYNC")
                             .font(FontId::new(18.5, FontFamily::Proportional))
@@ -212,14 +210,13 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(6.0);
 
-                    // --- Card 1: Directory Selection & JD File Upload ---
+                    // Card 1: Directory Selection & JD File Upload
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(8.0))
                         .stroke(Stroke::new(1.0_f32, card_border))
                         .inner_margin(Margin::symmetric(12.0, 8.0))
                         .show(ui, |ui| {
-                            // Folder Picker
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new("Source Directory:").size(11.0).strong());
                             });
@@ -251,7 +248,6 @@ impl eframe::App for AtsSyncApp {
 
                             ui.add_space(6.0);
 
-                            // Job Description File Picker
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new("Job Description File (Optional):").size(11.0).strong());
                             });
@@ -295,7 +291,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(6.0);
 
-                    // --- Card 2: Export Options & Execution Trigger ---
+                    // Card 2: Export Options & Execution Trigger
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(8.0))
@@ -349,7 +345,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(6.0);
 
-                    // --- Card 3: Results & File Actions ---
+                    // Card 3: Results & File Actions
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(8.0))

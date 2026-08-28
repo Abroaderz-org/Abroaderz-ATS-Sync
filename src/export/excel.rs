@@ -29,7 +29,7 @@ pub fn export_candidates_to_excel(
         .set_border(FormatBorder::Thin)
         .set_font_color(Color::RGB(0x16A34A));
 
-    let has_score = candidates.first().map_or(false, |c| c.match_score.is_some());
+    let has_score = candidates.iter().any(|c| c.match_score.is_some());
 
     let mut headers = vec![
         "S.No",
