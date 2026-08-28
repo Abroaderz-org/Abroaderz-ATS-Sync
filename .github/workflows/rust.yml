@@ -18,6 +18,12 @@ jobs:
       - name: Install Stable Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Rust Cache Action
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: "windows-ci"
+          cache-all-crates: "true"
+
       - name: Verify Compilation
         run: cargo check --verbose
 
