@@ -239,35 +239,35 @@ impl eframe::App for AtsSyncApp {
         } else {
             egui::Visuals::light()
         };
-        style.visuals.widgets.noninteractive.rounding = Rounding::same(8.0);
-        style.visuals.widgets.inactive.rounding = Rounding::same(8.0);
-        style.visuals.widgets.hovered.rounding = Rounding::same(8.0);
-        style.visuals.widgets.active.rounding = Rounding::same(8.0);
+        style.visuals.widgets.noninteractive.rounding = Rounding::same(10.0);
+        style.visuals.widgets.inactive.rounding = Rounding::same(10.0);
+        style.visuals.widgets.hovered.rounding = Rounding::same(10.0);
+        style.visuals.widgets.active.rounding = Rounding::same(10.0);
         ctx.set_style(style);
 
-        // Elegant Frosted Glass Color Palette
+        // Translucent Acrylic Glass Fills
         let card_bg = if is_dark {
-            Color32::from_rgba_unmultiplied(20, 27, 45, 230)
+            Color32::from_rgba_unmultiplied(18, 26, 44, 210)
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 230)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 215)
         };
 
         let card_border = if is_dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 30)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 42)
         } else {
-            Color32::from_rgba_unmultiplied(0, 0, 0, 20)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 240)
         };
 
         let text_main = if is_dark {
-            Color32::from_rgb(243, 244, 246)
+            Color32::from_rgb(248, 250, 252)
         } else {
-            Color32::from_rgb(17, 24, 39)
+            Color32::from_rgb(15, 23, 42)
         };
 
         let text_sub = if is_dark {
-            Color32::from_rgb(156, 163, 175)
+            Color32::from_rgb(156, 175, 205)
         } else {
-            Color32::from_rgb(107, 114, 128)
+            Color32::from_rgb(71, 85, 105)
         };
 
         let brand_accent = Color32::from_rgb(14, 165, 233);
@@ -278,20 +278,20 @@ impl eframe::App for AtsSyncApp {
                 let rect = ui.max_rect();
                 let painter = ui.painter();
 
-                // Smooth Multi-Stop Gradient Canvas (Zero circles)
+                // Smooth Multi-Stop Mesh Backdrop
                 let (c_tl, c_tr, c_bl, c_br) = if is_dark {
                     (
-                        Color32::from_rgb(11, 15, 25),
-                        Color32::from_rgb(17, 24, 39),
-                        Color32::from_rgb(8, 11, 20),
-                        Color32::from_rgb(15, 20, 32),
+                        Color32::from_rgb(12, 18, 34),
+                        Color32::from_rgb(24, 16, 44),
+                        Color32::from_rgb(8, 12, 24),
+                        Color32::from_rgb(15, 22, 38),
                     )
                 } else {
                     (
-                        Color32::from_rgb(241, 245, 249),
-                        Color32::from_rgb(248, 250, 252),
-                        Color32::from_rgb(226, 232, 240),
-                        Color32::from_rgb(238, 242, 246),
+                        Color32::from_rgb(224, 238, 255),
+                        Color32::from_rgb(255, 238, 242),
+                        Color32::from_rgb(240, 244, 250),
+                        Color32::from_rgb(235, 242, 255),
                     )
                 };
 
@@ -319,9 +319,9 @@ impl eframe::App for AtsSyncApp {
                                 RichText::new(theme_label).size(12.0).strong().color(text_main),
                             )
                             .fill(if is_dark {
-                                Color32::from_rgba_unmultiplied(255, 255, 255, 18)
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 20)
                             } else {
-                                Color32::from_rgba_unmultiplied(0, 0, 0, 10)
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 200)
                             })
                             .stroke(Stroke::new(1.0_f32, card_border))
                             .min_size(Vec2::new(88.0, 24.0));
@@ -431,7 +431,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // Card 2: Export Target & Action
+                    // Card 2: Export Target & Actions
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
