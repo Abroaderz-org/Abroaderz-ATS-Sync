@@ -130,7 +130,7 @@ impl Default for AtsSyncApp {
         Self {
             folder_path: initial_path,
             jd_file_path: None,
-            status_message: "Ready. Select source folder and optional Job Description file.".to_string(),
+            status_message: "Ready. Select folder and optional JD to process.".to_string(),
             candidates_count: None,
             csv_file: None,
             excel_file: None,
@@ -142,45 +142,88 @@ impl Default for AtsSyncApp {
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let visuals = if self.dark_mode {
+        let is_dark = self.dark_mode;
+
+        // --- Glassmorphism Palette Setup ---
+        let base_bg = if is_dark {
+            Color32::from_rgb(11, 15, 25)
+        } else {
+            Color32::from_rgb(243, 246, 251)
+        };
+
+        let card_bg = if is_dark {
+            Color32::from_rgba_unmultiplied(22, 30, 49, 215) // ~84% slate-dark
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 210) // ~82% frosted white
+        };
+
+        let card_border = if is_dark {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 24) // Subtly lit glass rim
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 255) // Solid white rim
+        };
+
+        let brand_accent = Color32::from_rgb(14, 165, 233);
+
+        let text_main = if is_dark {
+            Color32::from_rgb(241, 245, 249)
+        } else {
+            Color32::from_rgb(30, 41, 59)
+        };
+
+        let text_sub = if is_dark {
+            Color32::from_rgb(148, 163, 184)
+        } else {
+            Color32::from_rgb(100, 116, 139)
+        };
+
+        let mut style = (*ctx.style()).clone();
+        style.visuals = if is_dark {
             egui::Visuals::dark()
         } else {
             egui::Visuals::light()
         };
-        ctx.set_visuals(visuals);
-
-        let is_dark = self.dark_mode;
-        let card_bg = if is_dark {
-            Color32::from_rgb(22, 27, 34)
-        } else {
-            Color32::from_rgb(255, 255, 255)
-        };
-        let card_border = if is_dark {
-            Color32::from_rgb(48, 54, 61)
-        } else {
-            Color32::from_rgb(226, 232, 240)
-        };
-        let brand_accent = Color32::from_rgb(14, 165, 233);
-
-        let mut style = (*ctx.style()).clone();
-        style.visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
-        style.visuals.widgets.inactive.rounding = Rounding::same(6.0);
-        style.visuals.widgets.hovered.rounding = Rounding::same(6.0);
-        style.visuals.widgets.active.rounding = Rounding::same(6.0);
+        style.visuals.widgets.noninteractive.rounding = Rounding::same(8.0);
+        style.visuals.widgets.inactive.rounding = Rounding::same(8.0);
+        style.visuals.widgets.hovered.rounding = Rounding::same(8.0);
+        style.visuals.widgets.active.rounding = Rounding::same(8.0);
         ctx.set_style(style);
 
         egui::CentralPanel::default()
-            .frame(Frame::central_panel(&ctx.style()).inner_margin(Margin::symmetric(24.0, 12.0)))
+            .frame(Frame::none().fill(base_bg))
             .show(ctx, |ui| {
+                let rect = ui.max_rect();
+                let painter = ui.painter();
+
+                // --- Background Ambient Aurora Glows ---
+                let glow_left = if is_dark {
+                    Color32::from_rgba_unmultiplied(37, 99, 235, 40) // Deep Blue
+                } else {
+                    Color32::from_rgba_unmultiplied(186, 230, 253, 145) // Sky Blue
+                };
+
+                let glow_right = if is_dark {
+                    Color32::from_rgba_unmultiplied(147, 51, 234, 35) // Rich Violet
+                } else {
+                    Color32::from_rgba_unmultiplied(254, 240, 138, 110) // Warm Amber
+                };
+
+                painter.circle_filled(rect.left_top() + egui::vec2(100.0, 70.0), 240.0, glow_left);
+                painter.circle_filled(rect.right_top() + egui::vec2(-90.0, 90.0), 210.0, glow_right);
+
                 ui.vertical_centered(|ui| {
                     ui.set_max_width(560.0);
+                    ui.add_space(8.0);
 
-                    // --- Top Theme Toggle Row ---
+                    // --- Header & Theme Toggle ---
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let theme_label = if self.dark_mode { "Light Mode" } else { "Dark Mode" };
-                            let theme_btn = egui::Button::new(RichText::new(theme_label).size(12.0).strong())
-                                .min_size(Vec2::new(88.0, 24.0));
+                            let theme_btn = egui::Button::new(
+                                RichText::new(theme_label).size(12.0).strong().color(text_main)
+                            )
+                            .fill(if is_dark { Color32::from_rgba_unmultiplied(255, 255, 255, 15) } else { Color32::from_rgba_unmultiplied(255, 255, 255, 180) })
+                            .min_size(Vec2::new(88.0, 24.0));
 
                             if ui.add(theme_btn).clicked() {
                                 self.dark_mode = !self.dark_mode;
@@ -188,9 +231,8 @@ impl eframe::App for AtsSyncApp {
                         });
                     });
 
-                    ui.add_space(4.0);
+                    ui.add_space(2.0);
 
-                    // --- Header Branding ---
                     ui.label(
                         RichText::new("ABROADERZ ATS SYNC")
                             .font(FontId::new(20.0, FontFamily::Proportional))
@@ -201,24 +243,20 @@ impl eframe::App for AtsSyncApp {
                     ui.label(
                         RichText::new("Automated Neural Resume Pipeline")
                             .font(FontId::new(12.0, FontFamily::Proportional))
-                            .color(if is_dark {
-                                Color32::from_rgb(148, 163, 184)
-                            } else {
-                                Color32::from_rgb(100, 116, 139)
-                            }),
+                            .color(text_sub),
                     );
 
-                    ui.add_space(8.0);
+                    ui.add_space(10.0);
 
-                    // --- Card 1: Directory Selection & JD File Upload ---
+                    // --- Glass Card 1: Directory Selection & JD Upload ---
                     Frame::none()
                         .fill(card_bg)
-                        .rounding(Rounding::same(8.0))
-                        .stroke(Stroke::new(1.0_f32, card_border))
+                        .rounding(Rounding::same(12.0))
+                        .stroke(Stroke::new(1.0, card_border))
                         .inner_margin(Margin::symmetric(14.0, 10.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new("Source Directory:").size(13.0).strong());
+                                ui.label(RichText::new("Source Directory:").size(13.0).strong().color(text_main));
                             });
                             ui.add_space(4.0);
                             ui.horizontal(|ui| {
@@ -241,7 +279,7 @@ impl eframe::App for AtsSyncApp {
                                 if ui.add(browse_btn).clicked() {
                                     if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                                         self.folder_path = Some(folder);
-                                        self.status_message = "Source directory set.".to_string();
+                                        self.status_message = "Source directory updated.".to_string();
                                     }
                                 }
                             });
@@ -249,7 +287,7 @@ impl eframe::App for AtsSyncApp {
                             ui.add_space(8.0);
 
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new("Job Description File (Optional):").size(13.0).strong());
+                                ui.label(RichText::new("Job Description File (Optional):").size(13.0).strong().color(text_main));
                             });
                             ui.add_space(4.0);
                             ui.horizontal(|ui| {
@@ -291,15 +329,15 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // --- Card 2: Export Options & Run Trigger ---
+                    // --- Glass Card 2: Export Options & Execution Trigger ---
                     Frame::none()
                         .fill(card_bg)
-                        .rounding(Rounding::same(8.0))
-                        .stroke(Stroke::new(1.0_f32, card_border))
+                        .rounding(Rounding::same(12.0))
+                        .stroke(Stroke::new(1.0, card_border))
                         .inner_margin(Margin::symmetric(14.0, 10.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new("Export Target:").size(13.0).strong());
+                                ui.label(RichText::new("Export Target:").size(13.0).strong().color(text_main));
                                 ui.add_space(8.0);
                                 ui.radio_value(&mut self.export_format, ExportFormat::Excel, "Excel (.xlsx)");
                                 ui.radio_value(&mut self.export_format, ExportFormat::Csv, "CSV (.csv)");
@@ -345,15 +383,15 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // --- Card 3: Results & Open Action Buttons ---
+                    // --- Glass Card 3: Results & File Actions ---
                     Frame::none()
                         .fill(card_bg)
-                        .rounding(Rounding::same(8.0))
-                        .stroke(Stroke::new(1.0_f32, card_border))
+                        .rounding(Rounding::same(12.0))
+                        .stroke(Stroke::new(1.0, card_border))
                         .inner_margin(Margin::symmetric(14.0, 10.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new("Status & Results").size(13.0).strong());
+                                ui.label(RichText::new("Status & Results").size(13.0).strong().color(text_main));
                             });
 
                             ui.add_space(4.0);
@@ -362,11 +400,7 @@ impl eframe::App for AtsSyncApp {
                                 RichText::new(&self.status_message)
                                     .font(FontId::new(12.0, FontFamily::Proportional))
                                     .italics()
-                                    .color(if is_dark {
-                                        Color32::from_rgb(148, 163, 184)
-                                    } else {
-                                        Color32::from_rgb(100, 116, 139)
-                                    }),
+                                    .color(text_sub),
                             );
 
                             if let Some(count) = self.candidates_count {
