@@ -1,9 +1,11 @@
 use eframe::egui::{
-    self, Color32, FontFamily, FontId, Frame, Margin, RichText, Rounding, Stroke, Vec2,
+    self, Color32, FontFamily, FontId, Frame, Margin, Pos2, Rect, RichText, Rounding, Stroke, Vec2,
 };
 use std::fs;
 use std::panic;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
 use walkdir::WalkDir;
 
 use crate::engine::inference::infer_candidate_details;
@@ -15,6 +17,11 @@ pub enum ExportFormat {
     Excel,
     Csv,
     Both,
+}
+
+enum PipelineMessage {
+    Progress(String),
+    Complete(Result<(usize, Option<String>, Option<String>), String>),
 }
 
 fn extract_file_content(path: &Path) -> Option<String> {
@@ -32,41 +39,72 @@ fn extract_file_content(path: &Path) -> Option<String> {
     }
 }
 
-fn process_directory(
-    dir_path: &Path,
+fn run_pipeline_worker(
+    dir_path: PathBuf,
     format: ExportFormat,
-    jd_file_path: Option<&PathBuf>,
-) -> Result<(usize, Option<String>, Option<String>), String> {
+    jd_file_path: Option<PathBuf>,
+    tx: Sender<PipelineMessage>,
+) {
     let jd_text = jd_file_path
+        .as_ref()
         .and_then(|p| extract_file_content(p))
         .unwrap_or_default();
 
-    let mut candidates = Vec::new();
-
-    for entry in WalkDir::new(dir_path).into_iter().filter_map(|e| e.ok()) {
+    let mut files = Vec::new();
+    for entry in WalkDir::new(&dir_path).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path().to_path_buf();
         if path.is_file() {
-            let file_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("Unknown")
-                .to_string();
-
-            let jd_clone = jd_text.clone();
-
-            let parsed_candidate = panic::catch_unwind(move || {
-                let raw_text = extract_file_content(&path);
-                raw_text.map(|text| infer_candidate_details(&text, &file_name, &jd_clone))
-            });
-
-            if let Ok(Some(candidate)) = parsed_candidate {
-                candidates.push(candidate);
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if ext == "pdf" || ext == "docx" {
+                files.push(path);
             }
         }
     }
 
+    if files.is_empty() {
+        let _ = tx.send(PipelineMessage::Complete(Err(
+            "No PDF or DOCX files found in selected folder.".to_string(),
+        )));
+        return;
+    }
+
+    let total_files = files.len();
+    let mut candidates = Vec::new();
+
+    for (idx, path) in files.into_iter().enumerate() {
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+
+        let _ = tx.send(PipelineMessage::Progress(format!(
+            "Parsing ({}/{}): {}",
+            idx + 1,
+            total_files,
+            file_name
+        )));
+
+        let jd_clone = jd_text.clone();
+        let parsed_candidate = panic::catch_unwind(move || {
+            let raw_text = extract_file_content(&path);
+            raw_text.map(|text| infer_candidate_details(&text, &file_name, &jd_clone))
+        });
+
+        if let Ok(Some(candidate)) = parsed_candidate {
+            candidates.push(candidate);
+        }
+    }
+
     if candidates.is_empty() {
-        return Err("No valid PDF or DOCX resumes found in chosen directory.".to_string());
+        let _ = tx.send(PipelineMessage::Complete(Err(
+            "Could not parse valid candidate records from files.".to_string(),
+        )));
+        return;
     }
 
     if !jd_text.trim().is_empty() {
@@ -81,34 +119,41 @@ fn process_directory(
     let mut generated_csv = None;
     let mut generated_excel = None;
 
-    match format {
+    let res = match format {
         ExportFormat::Excel => {
             let excel_path = "Abroaderz_Candidates.xlsx".to_string();
             export_candidates_to_excel(&candidates, &excel_path)
-                .map_err(|e| format!("Excel export failed: {}", e))?;
-            generated_excel = Some(excel_path);
+                .map(|_| {
+                    generated_excel = Some(excel_path);
+                    (count, generated_csv, generated_excel)
+                })
+                .map_err(|e| format!("Excel export failed: {}", e))
         }
         ExportFormat::Csv => {
             let csv_path = "Abroaderz_Candidates.csv".to_string();
             export_candidates_to_csv(&candidates, &csv_path)
-                .map_err(|e| format!("CSV export failed: {}", e))?;
-            generated_csv = Some(csv_path);
+                .map(|_| {
+                    generated_csv = Some(csv_path);
+                    (count, generated_csv, generated_excel)
+                })
+                .map_err(|e| format!("CSV export failed: {}", e))
         }
         ExportFormat::Both => {
             let excel_path = "Abroaderz_Candidates.xlsx".to_string();
             let csv_path = "Abroaderz_Candidates.csv".to_string();
 
             export_candidates_to_excel(&candidates, &excel_path)
-                .map_err(|e| format!("Excel export failed: {}", e))?;
-            export_candidates_to_csv(&candidates, &csv_path)
-                .map_err(|e| format!("CSV export failed: {}", e))?;
-
-            generated_excel = Some(excel_path);
-            generated_csv = Some(csv_path);
+                .and_then(|_| export_candidates_to_csv(&candidates, &csv_path).map_err(|e| e.to_string().into()))
+                .map(|_| {
+                    generated_excel = Some(excel_path);
+                    generated_csv = Some(csv_path);
+                    (count, generated_csv, generated_excel)
+                })
+                .map_err(|e| format!("Export failed: {}", e))
         }
-    }
+    };
 
-    Ok((count, generated_csv, generated_excel))
+    let _ = tx.send(PipelineMessage::Complete(res));
 }
 
 pub struct AtsSyncApp {
@@ -120,6 +165,8 @@ pub struct AtsSyncApp {
     excel_file: Option<String>,
     export_format: ExportFormat,
     dark_mode: bool,
+    is_processing: bool,
+    rx: Option<Receiver<PipelineMessage>>,
 }
 
 impl Default for AtsSyncApp {
@@ -130,40 +177,62 @@ impl Default for AtsSyncApp {
         Self {
             folder_path: initial_path,
             jd_file_path: None,
-            status_message: "Ready. Select folder and optional JD to process.".to_string(),
+            status_message: "Ready. Select directory and optional JD file.".to_string(),
             candidates_count: None,
             csv_file: None,
             excel_file: None,
             export_format: ExportFormat::Excel,
             dark_mode: true,
+            is_processing: false,
+            rx: None,
         }
     }
 }
 
 impl eframe::App for AtsSyncApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Poll async background pipeline
+        if let Some(ref rx) = self.rx {
+            while let Ok(msg) = rx.try_recv() {
+                match msg {
+                    PipelineMessage::Progress(status) => {
+                        self.status_message = status;
+                    }
+                    PipelineMessage::Complete(result) => {
+                        self.is_processing = false;
+                        match result {
+                            Ok((count, csv, excel)) => {
+                                self.candidates_count = Some(count);
+                                self.csv_file = csv;
+                                self.excel_file = excel;
+                                self.status_message = format!("Extraction complete! {} profiles saved.", count);
+                            }
+                            Err(err) => {
+                                self.status_message = format!("Error: {}", err);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if self.is_processing {
+            ctx.request_repaint();
+        }
+
         let is_dark = self.dark_mode;
 
-        // --- Glassmorphism Palette Setup ---
-        let base_bg = if is_dark {
-            Color32::from_rgb(11, 15, 25)
-        } else {
-            Color32::from_rgb(243, 246, 251)
-        };
-
         let card_bg = if is_dark {
-            Color32::from_rgba_unmultiplied(22, 30, 49, 215) // ~84% slate-dark
+            Color32::from_rgba_unmultiplied(18, 24, 38, 215)
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 210) // ~82% frosted white
+            Color32::from_rgba_unmultiplied(255, 255, 255, 215)
         };
 
         let card_border = if is_dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 24) // Subtly lit glass rim
+            Color32::from_rgba_unmultiplied(255, 255, 255, 26)
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 255) // Solid white rim
+            Color32::from_rgba_unmultiplied(255, 255, 255, 220)
         };
-
-        let brand_accent = Color32::from_rgb(14, 165, 233);
 
         let text_main = if is_dark {
             Color32::from_rgb(241, 245, 249)
@@ -176,6 +245,8 @@ impl eframe::App for AtsSyncApp {
         } else {
             Color32::from_rgb(100, 116, 139)
         };
+
+        let brand_accent = Color32::from_rgb(14, 165, 233);
 
         let mut style = (*ctx.style()).clone();
         style.visuals = if is_dark {
@@ -190,39 +261,55 @@ impl eframe::App for AtsSyncApp {
         ctx.set_style(style);
 
         egui::CentralPanel::default()
-            .frame(Frame::none().fill(base_bg))
+            .frame(Frame::none())
             .show(ctx, |ui| {
                 let rect = ui.max_rect();
                 let painter = ui.painter();
 
-                // --- Background Ambient Aurora Glows ---
-                let glow_left = if is_dark {
-                    Color32::from_rgba_unmultiplied(37, 99, 235, 40) // Deep Blue
+                let (c_tl, c_tr, c_bl, c_br) = if is_dark {
+                    (
+                        Color32::from_rgb(15, 23, 42),
+                        Color32::from_rgb(28, 18, 51),
+                        Color32::from_rgb(10, 15, 30),
+                        Color32::from_rgb(13, 20, 36),
+                    )
                 } else {
-                    Color32::from_rgba_unmultiplied(186, 230, 253, 145) // Sky Blue
+                    (
+                        Color32::from_rgb(224, 238, 255),
+                        Color32::from_rgb(255, 241, 230),
+                        Color32::from_rgb(241, 245, 249),
+                        Color32::from_rgb(238, 242, 255),
+                    )
                 };
 
-                let glow_right = if is_dark {
-                    Color32::from_rgba_unmultiplied(147, 51, 234, 35) // Rich Violet
-                } else {
-                    Color32::from_rgba_unmultiplied(254, 240, 138, 110) // Warm Amber
-                };
-
-                painter.circle_filled(rect.left_top() + egui::vec2(100.0, 70.0), 240.0, glow_left);
-                painter.circle_filled(rect.right_top() + egui::vec2(-90.0, 90.0), 210.0, glow_right);
+                let mut mesh = egui::Mesh::default();
+                mesh.add_rect_with_vertices(
+                    rect,
+                    [
+                        (Pos2::new(rect.min.x, rect.min.y), c_tl),
+                        (Pos2::new(rect.max.x, rect.min.y), c_tr),
+                        (Pos2::new(rect.max.x, rect.max.y), c_br),
+                        (Pos2::new(rect.min.x, rect.max.y), c_bl),
+                    ],
+                );
+                painter.add(mesh);
 
                 ui.vertical_centered(|ui| {
                     ui.set_max_width(560.0);
                     ui.add_space(8.0);
 
-                    // --- Header & Theme Toggle ---
+                    // Top Bar
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let theme_label = if self.dark_mode { "Light Mode" } else { "Dark Mode" };
                             let theme_btn = egui::Button::new(
-                                RichText::new(theme_label).size(12.0).strong().color(text_main)
+                                RichText::new(theme_label).size(12.0).strong().color(text_main),
                             )
-                            .fill(if is_dark { Color32::from_rgba_unmultiplied(255, 255, 255, 15) } else { Color32::from_rgba_unmultiplied(255, 255, 255, 180) })
+                            .fill(if is_dark {
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 18)
+                            } else {
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 200)
+                            })
                             .min_size(Vec2::new(88.0, 24.0));
 
                             if ui.add(theme_btn).clicked() {
@@ -248,7 +335,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(10.0);
 
-                    // --- Glass Card 1: Directory Selection & JD Upload ---
+                    // Frosted Card 1
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -276,7 +363,7 @@ impl eframe::App for AtsSyncApp {
                                 let browse_btn = egui::Button::new(RichText::new("Browse").size(12.0).strong())
                                     .min_size(Vec2::new(76.0, 26.0));
 
-                                if ui.add(browse_btn).clicked() {
+                                if ui.add_enabled(!self.is_processing, browse_btn).clicked() {
                                     if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                                         self.folder_path = Some(folder);
                                         self.status_message = "Source directory updated.".to_string();
@@ -307,7 +394,7 @@ impl eframe::App for AtsSyncApp {
                                 let upload_btn = egui::Button::new(RichText::new("Upload JD").size(12.0).strong())
                                     .min_size(Vec2::new(76.0, 26.0));
 
-                                if ui.add(upload_btn).clicked() {
+                                if ui.add_enabled(!self.is_processing, upload_btn).clicked() {
                                     if let Some(file) = rfd::FileDialog::new()
                                         .add_filter("Documents", &["pdf", "docx", "txt"])
                                         .pick_file()
@@ -320,7 +407,7 @@ impl eframe::App for AtsSyncApp {
                                 if self.jd_file_path.is_some() {
                                     let clear_btn = egui::Button::new(RichText::new("Clear").size(12.0))
                                         .min_size(Vec2::new(60.0, 26.0));
-                                    if ui.add(clear_btn).clicked() {
+                                    if ui.add_enabled(!self.is_processing, clear_btn).clicked() {
                                         self.jd_file_path = None;
                                     }
                                 }
@@ -329,7 +416,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // --- Glass Card 2: Export Options & Execution Trigger ---
+                    // Frosted Card 2
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -346,9 +433,15 @@ impl eframe::App for AtsSyncApp {
 
                             ui.add_space(8.0);
 
-                            let can_run = self.folder_path.is_some();
+                            let can_run = self.folder_path.is_some() && !self.is_processing;
+                            let btn_label = if self.is_processing {
+                                "PROCESSING RESUMES IN BACKGROUND..."
+                            } else {
+                                "RUN BATCH ATS EXTRACTION"
+                            };
+
                             let run_btn = egui::Button::new(
-                                RichText::new("RUN BATCH ATS EXTRACTION")
+                                RichText::new(btn_label)
                                     .font(FontId::new(13.0, FontFamily::Proportional))
                                     .strong()
                                     .color(Color32::WHITE),
@@ -362,28 +455,25 @@ impl eframe::App for AtsSyncApp {
                                 if let Some(ref path) = self.folder_path {
                                     self.csv_file = None;
                                     self.excel_file = None;
+                                    self.is_processing = true;
 
-                                    match process_directory(path, self.export_format, self.jd_file_path.as_ref()) {
-                                        Ok((count, csv, excel)) => {
-                                            self.candidates_count = Some(count);
-                                            self.csv_file = csv;
-                                            self.excel_file = excel;
-                                            self.status_message = format!(
-                                                "Extraction complete. {} candidate profiles parsed.",
-                                                count
-                                            );
-                                        }
-                                        Err(err) => {
-                                            self.status_message = format!("Error: {}", err);
-                                        }
-                                    }
+                                    let (tx, rx) = channel();
+                                    self.rx = Some(rx);
+
+                                    let path_buf = path.clone();
+                                    let format = self.export_format;
+                                    let jd_path = self.jd_file_path.clone();
+
+                                    thread::spawn(move || {
+                                        run_pipeline_worker(path_buf, format, jd_path, tx);
+                                    });
                                 }
                             }
                         });
 
                     ui.add_space(8.0);
 
-                    // --- Glass Card 3: Results & File Actions ---
+                    // Frosted Card 3
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -439,5 +529,30 @@ impl eframe::App for AtsSyncApp {
                         });
                 });
             });
+    }
+}
+
+trait MeshExt {
+    fn add_rect_with_vertices(&mut self, rect: Rect, vertices: [(Pos2, Color32); 4]);
+}
+
+impl MeshExt for egui::Mesh {
+    fn add_rect_with_vertices(&mut self, _rect: Rect, vertices: [(Pos2, Color32); 4]) {
+        let idx = self.vertices.len() as u32;
+        for (pos, color) in vertices {
+            self.vertices.push(egui::epaint::Vertex {
+                pos,
+                uv: egui::epaint::WHITE_UV,
+                color,
+            });
+        }
+        self.indices.extend_from_slice(&[
+            idx,
+            idx + 1,
+            idx + 2,
+            idx,
+            idx + 2,
+            idx + 3,
+        ]);
     }
 }
