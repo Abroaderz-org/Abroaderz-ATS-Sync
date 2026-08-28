@@ -4,7 +4,7 @@ use regex::Regex;
 pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> CandidateRecord {
     let clean_text = text.replace('\r', "\n");
 
-    let name = extract_candidate_name(&clean_text).unwrap_or_else(|| clean_fallback_filename(file_name));
+    let name = extract_candidate_name(&clean_text, file_name);
     let passport_no = extract_passport(&clean_text);
     let position = extract_position(&clean_text, file_name);
     let education = extract_education(&clean_text);
@@ -38,56 +38,57 @@ pub fn infer_candidate_details(text: &str, file_name: &str, jd_text: &str) -> Ca
     }
 }
 
-fn extract_candidate_name(text: &str) -> Option<String> {
-    // 1. Explicit Candidate Headers
-    let name_tag_re = Regex::new(r"(?im)^\s*(?:Candidate\s*Name|Full\s*Name|Name)\s*[:\-\.]\s*([A-Za-z\s\.]{3,35})$").unwrap();
+fn extract_candidate_name(text: &str, file_name: &str) -> String {
+    let lines: Vec<&str> = text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+
+    // 1. Explicit Candidate / Trainee / Employee Name tags
+    let name_tag_re = Regex::new(r"(?im)^\s*(?:Candidate\s*Name|Trainee\s*Name|Full\s*Name|Name)\s*[:\-\.]\s*([A-Za-z\s\.]{3,35})$").unwrap();
     for cap in name_tag_re.captures_iter(text) {
         let n = cap[1].trim();
         let nl = n.to_lowercase();
-        if !nl.contains("father") && !nl.contains("supervisor") && !nl.contains("foreman") && !nl.contains("engineer") {
-            return Some(clean_name_string(n));
+        if !nl.contains("father")
+            && !nl.contains("post")
+            && !nl.contains("applied")
+            && !nl.contains("supervisor")
+            && !nl.contains("foreman")
+            && !nl.contains("engineer")
+            && !nl.contains("technician")
+        {
+            return clean_name_string(n);
         }
     }
 
-    // 2. Direct Header Check from top 30 lines
-    let lines: Vec<&str> = text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).take(30).collect();
-    for line in &lines {
+    // 2. Scan top 25 non-empty lines for prominent Candidate Header
+    let stop_words = [
+        "resume", "curriculum", "biodata", "profile", "post applied", "post apply",
+        "objective", "career", "contact", "about me", "personal", "father",
+        "mother", "experience", "education", "passport", "trags", "knpc", "heisco",
+        "reliance", "qcon", "aytb", "kanooz", "descon", "supervisor", "foreman",
+        "engineer", "technician", "fitter", "diploma", "mechanical", "electrical"
+    ];
+
+    for line in lines.iter().take(25) {
         let l_lower = line.to_lowercase();
-        if l_lower.contains("father")
-            || l_lower.contains("stream")
-            || l_lower.contains("endstream")
-            || l_lower.contains("resume")
-            || l_lower.contains("curriculum")
-            || l_lower.contains("profile")
-            || l_lower.contains("page ")
-            || l_lower.contains("personal")
-            || l_lower.contains("career")
-            || l_lower.contains("contact")
-            || l_lower.contains("objective")
-        {
+        if stop_words.iter().any(|&w| l_lower.contains(w)) {
             continue;
         }
 
+        // Must be a proper name string (letters, dots, spaces)
         if line.len() >= 3 && line.len() <= 32 && line.chars().all(|c| c.is_alphabetic() || c.is_whitespace() || c == '.') {
-            if !l_lower.contains("supervisor")
-                && !l_lower.contains("engineer")
-                && !l_lower.contains("technician")
-                && !l_lower.contains("foreman")
-                && !l_lower.contains("fitter")
-                && !l_lower.contains("diploma")
-                && !l_lower.contains("mechanical")
-            {
-                return Some(clean_name_string(line));
-            }
+            return clean_name_string(line);
         }
     }
-    None
+
+    clean_fallback_filename(file_name)
 }
 
 fn clean_name_string(raw: &str) -> String {
     raw.replace("Mr. ", "")
         .replace("MR. ", "")
         .replace("Mr.", "")
+        .replace("Date", "")
+        .replace("Name", "")
+        .replace(":", "")
         .split_whitespace()
         .collect::<Vec<&str>>()
         .join(" ")
@@ -100,25 +101,40 @@ fn clean_fallback_filename(file_name: &str) -> String {
         .trim_end_matches(".docx")
         .replace("Copy of ", "")
         .replace(" - RESUME", "")
+        .replace("_merged", "")
+        .replace(" (1)", "")
+        .replace(" (16)", "")
         .replace("_", " ")
         .trim()
         .to_string();
 
-    if clean.to_lowercase().contains("mechanical") || clean.to_lowercase().contains("supervisor") || clean.to_lowercase().contains("document") {
-        "Candidate".to_string()
-    } else {
-        clean
+    let lower = clean.to_lowercase();
+    if lower.contains("mechanical") || lower.contains("supervisor") || lower.contains("foreman") || lower.contains("doc") || lower.contains("document") || lower.contains("update") || lower.contains("organized") {
+        let re = Regex::new(r"^[A-Za-z]+").unwrap();
+        if let Some(m) = re.find(&clean) {
+            if m.as_str().len() >= 3 {
+                return m.as_str().to_string();
+            }
+        }
     }
+    clean
 }
 
 fn extract_passport(text: &str) -> String {
-    let passport_re = Regex::new(r"(?i)(?:Passport\s*(?:No|Details|Number)?[\s:]*|Pass\s*port\s*No[\s:]*)\s*([A-PR-WYa-pr-wy]\s*[0-9]{7,8})").unwrap();
-    if let Some(c) = passport_re.captures(text) {
+    // Look for explicit passport headers first
+    let passport_tag = Regex::new(r"(?i)(?:Passport\s*(?:No|Number|Details)?|Pass\s*port\s*No)[\s:\-\.]*([A-PR-WYa-pr-wy]\s*[0-9]{7,8})").unwrap();
+    if let Some(c) = passport_tag.captures(text) {
         return c[1].replace(' ', "").to_uppercase();
     }
+
+    // Capture standard Indian passport numbers (1 Letter + 7 or 8 Digits)
     let general_re = Regex::new(r"\b([A-PR-WYa-pr-wy][0-9]{7,8})\b").unwrap();
-    if let Some(c) = general_re.captures(text) {
-        return c[1].to_uppercase();
+    for cap in general_re.captures_iter(text) {
+        let p = cap[1].to_uppercase();
+        // Discard common false codes
+        if !p.starts_with("C1") && !p.starts_with("C2") && !p.starts_with("DCN") && !p.starts_with("DPA") {
+            return p;
+        }
     }
     "N/A".to_string()
 }
@@ -142,27 +158,34 @@ fn month_name_to_num(month_str: &str) -> Option<&'static str> {
 }
 
 fn extract_dob(text: &str) -> String {
-    let dob_re = Regex::new(r"(?im)(?:DOB|Date\s+of\s+Birth|Birth\s*Date)[\s:\-\.]*([0-9]{1,2}[\s\-/.][A-Za-z0-9]{2,9}[\s\-/.][0-9]{4})").unwrap();
+    let dob_re = Regex::new(r"(?im)(?:DOB|Date\s+of\s+Birth|Birth\s*Date)[\s:\-\.]*([0-9]{1,2}[\s\-/.][A-Za-z0-9]{2,9}[\s\-/.][0-9]{2,4})").unwrap();
     if let Some(c) = dob_re.captures(text) {
         let clean = c[1].trim();
 
-        let num_re = Regex::new(r"^([0-9]{1,2})[\/\.\-]([0-9]{1,2})[\/\.\-]([0-9]{4})$").unwrap();
+        // Pattern 1: Numeric DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+        let num_re = Regex::new(r"^([0-9]{1,2})[\/\.\-]([0-9]{1,2})[\/\.\-]([0-9]{2,4})$").unwrap();
         if let Some(caps) = num_re.captures(clean) {
             let day = format!("{:0>2}", &caps[1]);
             let month = format!("{:0>2}", &caps[2]);
-            let year = &caps[3];
+            let mut year = caps[3].to_string();
+            if year.len() == 2 {
+                year = format!("19{}", year);
+            }
             return format!("{}/{}/{}", day, month, year);
         }
 
-        let word_re = Regex::new(r"(?i)^([0-9]{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([A-Za-z]{3,9})[\s\-\/\.]([0-9]{4})$").unwrap();
+        // Pattern 2: Textual month "03 Nov 2001", "3rd November 2001"
+        let word_re = Regex::new(r"(?i)^([0-9]{1,2})(?:st|nd|rd|th)?[\s\-\/\.]([A-Za-z]{3,9})[\s\-\/\.]([0-9]{2,4})$").unwrap();
         if let Some(caps) = word_re.captures(clean) {
             let day = format!("{:0>2}", &caps[1]);
             if let Some(month) = month_name_to_num(&caps[2]) {
-                let year = &caps[3];
+                let mut year = caps[3].to_string();
+                if year.len() == 2 {
+                    year = format!("19{}", year);
+                }
                 return format!("{}/{}/{}", day, month, year);
             }
         }
-        return clean.to_string();
     }
     "N/A".to_string()
 }
@@ -183,10 +206,14 @@ fn extract_email(text: &str) -> String {
     for cap in email_re.captures_iter(text) {
         let em = cap[0].trim_start_matches('-').trim().to_string();
         let em_low = em.to_lowercase();
-        if em_low.ends_with(".com") || em_low.ends_with(".in") || em_low.ends_with(".org") || em_low.ends_with(".net") {
-            if !em_low.contains("zav") && !em_low.contains("qd3") {
-                return em;
-            }
+        if (em_low.ends_with(".com") || em_low.ends_with(".in") || em_low.ends_with(".net"))
+            && !em_low.contains("zav")
+            && !em_low.contains("qd3")
+            && !em_low.contains("vsnl")
+            && !em_low.contains("knpc")
+            && !em_low.contains("descon")
+        {
+            return em;
         }
     }
     "N/A".to_string()
@@ -275,8 +302,6 @@ fn extract_location(text: &str) -> (String, String) {
         "Uttar Pradesh".to_string()
     } else if lower.contains("kerala") {
         "Kerala".to_string()
-    } else if lower.contains("maharashtra") || lower.contains("mumbai") {
-        "Maharashtra".to_string()
     } else {
         "Tamil Nadu".to_string()
     };

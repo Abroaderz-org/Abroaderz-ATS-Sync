@@ -74,7 +74,7 @@ fn run_pipeline_worker(
     }
 
     let total_files = files.len();
-    let mut candidates = Vec::new();
+    let mut raw_candidates = Vec::new();
 
     for (idx, path) in files.into_iter().enumerate() {
         let file_name = path
@@ -100,9 +100,9 @@ fn run_pipeline_worker(
         });
 
         match parsed_candidate {
-            Ok(candidate) => candidates.push(candidate),
+            Ok(candidate) => raw_candidates.push(candidate),
             Err(_) => {
-                candidates.push(CandidateRecord {
+                raw_candidates.push(CandidateRecord {
                     name: file_name.replace(".pdf", "").replace(".docx", ""),
                     passport_no: "N/A".to_string(),
                     position: "Mechanical Supervisor".to_string(),
@@ -118,6 +118,14 @@ fn run_pipeline_worker(
                     match_score: None,
                 });
             }
+        }
+    }
+
+    // Precise deduplication pass
+    let mut candidates: Vec<CandidateRecord> = Vec::new();
+    for cand in raw_candidates {
+        if !candidates.iter().any(|existing| existing.is_duplicate_of(&cand)) {
+            candidates.push(cand);
         }
     }
 
@@ -216,7 +224,7 @@ impl eframe::App for AtsSyncApp {
                                 self.candidates_count = Some(count);
                                 self.csv_file = csv;
                                 self.excel_file = excel;
-                                self.status_message = format!("Extraction complete! {} profiles saved.", count);
+                                self.status_message = format!("Extraction complete! {} unique profiles saved.", count);
                             }
                             Err(err) => {
                                 self.status_message = format!("Error: {}", err);
@@ -245,17 +253,17 @@ impl eframe::App for AtsSyncApp {
         style.visuals.widgets.active.rounding = Rounding::same(10.0);
         ctx.set_style(style);
 
-        // Translucent Acrylic Glass Fills
+        // Translucent Obsidian Black vs. Translucent Light Acrylic
         let card_bg = if is_dark {
-            Color32::from_rgba_unmultiplied(18, 26, 44, 210)
+            Color32::from_rgba_unmultiplied(12, 16, 26, 190) // Translucent pitch-black acrylic
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 215)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 195) // Translucent frosted pearl
         };
 
         let card_border = if is_dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 42)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 38)
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 240)
+            Color32::from_rgba_unmultiplied(0, 0, 0, 25)
         };
 
         let text_main = if is_dark {
@@ -278,20 +286,20 @@ impl eframe::App for AtsSyncApp {
                 let rect = ui.max_rect();
                 let painter = ui.painter();
 
-                // Smooth Multi-Stop Mesh Backdrop
+                // Base Canvas: Pitch Black Glass in Dark Mode / Ice White in Light Mode
                 let (c_tl, c_tr, c_bl, c_br) = if is_dark {
                     (
-                        Color32::from_rgb(12, 18, 34),
-                        Color32::from_rgb(24, 16, 44),
-                        Color32::from_rgb(8, 12, 24),
-                        Color32::from_rgb(15, 22, 38),
+                        Color32::from_rgb(6, 8, 14),
+                        Color32::from_rgb(10, 12, 20),
+                        Color32::from_rgb(3, 4, 8),
+                        Color32::from_rgb(8, 10, 18),
                     )
                 } else {
                     (
-                        Color32::from_rgb(224, 238, 255),
-                        Color32::from_rgb(255, 238, 242),
+                        Color32::from_rgb(236, 242, 250),
+                        Color32::from_rgb(246, 248, 252),
+                        Color32::from_rgb(230, 236, 245),
                         Color32::from_rgb(240, 244, 250),
-                        Color32::from_rgb(235, 242, 255),
                     )
                 };
 
@@ -319,9 +327,9 @@ impl eframe::App for AtsSyncApp {
                                 RichText::new(theme_label).size(12.0).strong().color(text_main),
                             )
                             .fill(if is_dark {
-                                Color32::from_rgba_unmultiplied(255, 255, 255, 20)
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 18)
                             } else {
-                                Color32::from_rgba_unmultiplied(255, 255, 255, 200)
+                                Color32::from_rgba_unmultiplied(0, 0, 0, 10)
                             })
                             .stroke(Stroke::new(1.0_f32, card_border))
                             .min_size(Vec2::new(88.0, 24.0));
@@ -349,7 +357,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(10.0);
 
-                    // Card 1: Directory & JD Input
+                    // Frosted Card 1
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -431,7 +439,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // Card 2: Export Target & Actions
+                    // Frosted Card 2
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -489,7 +497,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // Card 3: Status & Output
+                    // Frosted Card 3
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -514,7 +522,7 @@ impl eframe::App for AtsSyncApp {
                                     ui.add_space(6.0);
 
                                     ui.label(
-                                        RichText::new(format!("[SUCCESS] {} Candidates Ingested", count))
+                                        RichText::new(format!("[SUCCESS] {} Unique Candidates Ingested", count))
                                             .font(FontId::new(13.0, FontFamily::Proportional))
                                             .strong()
                                             .color(Color32::from_rgb(34, 197, 94)),
