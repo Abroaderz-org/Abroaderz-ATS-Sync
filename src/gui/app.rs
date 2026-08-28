@@ -1,5 +1,5 @@
 use eframe::egui::{
-    self, Color32, FontFamily, FontId, Frame, Margin, Pos2, RichText, Rounding, Stroke, Vec2,
+    self, Color32, FontFamily, FontId, Frame, Margin, Pos2, Rect, RichText, Rounding, Stroke, Vec2,
 };
 use std::fs;
 use std::panic;
@@ -239,34 +239,35 @@ impl eframe::App for AtsSyncApp {
         } else {
             egui::Visuals::light()
         };
-        style.visuals.widgets.noninteractive.rounding = Rounding::same(10.0);
-        style.visuals.widgets.inactive.rounding = Rounding::same(10.0);
-        style.visuals.widgets.hovered.rounding = Rounding::same(10.0);
-        style.visuals.widgets.active.rounding = Rounding::same(10.0);
+        style.visuals.widgets.noninteractive.rounding = Rounding::same(8.0);
+        style.visuals.widgets.inactive.rounding = Rounding::same(8.0);
+        style.visuals.widgets.hovered.rounding = Rounding::same(8.0);
+        style.visuals.widgets.active.rounding = Rounding::same(8.0);
         ctx.set_style(style);
 
+        // Elegant Frosted Glass Color Palette
         let card_bg = if is_dark {
-            Color32::from_rgba_unmultiplied(16, 22, 38, 175)
+            Color32::from_rgba_unmultiplied(20, 27, 45, 230)
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 185)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 230)
         };
 
         let card_border = if is_dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 45)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 30)
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 240)
+            Color32::from_rgba_unmultiplied(0, 0, 0, 20)
         };
 
         let text_main = if is_dark {
-            Color32::from_rgb(248, 250, 252)
+            Color32::from_rgb(243, 244, 246)
         } else {
-            Color32::from_rgb(15, 23, 42)
+            Color32::from_rgb(17, 24, 39)
         };
 
         let text_sub = if is_dark {
-            Color32::from_rgb(160, 175, 200)
+            Color32::from_rgb(156, 163, 175)
         } else {
-            Color32::from_rgb(71, 85, 105)
+            Color32::from_rgb(107, 114, 128)
         };
 
         let brand_accent = Color32::from_rgb(14, 165, 233);
@@ -277,41 +278,34 @@ impl eframe::App for AtsSyncApp {
                 let rect = ui.max_rect();
                 let painter = ui.painter();
 
-                let base_color = if is_dark {
-                    Color32::from_rgb(10, 14, 26)
+                // Smooth Multi-Stop Gradient Canvas (Zero circles)
+                let (c_tl, c_tr, c_bl, c_br) = if is_dark {
+                    (
+                        Color32::from_rgb(11, 15, 25),
+                        Color32::from_rgb(17, 24, 39),
+                        Color32::from_rgb(8, 11, 20),
+                        Color32::from_rgb(15, 20, 32),
+                    )
                 } else {
-                    Color32::from_rgb(240, 244, 250)
+                    (
+                        Color32::from_rgb(241, 245, 249),
+                        Color32::from_rgb(248, 250, 252),
+                        Color32::from_rgb(226, 232, 240),
+                        Color32::from_rgb(238, 242, 246),
+                    )
                 };
-                painter.rect_filled(rect, 0.0, base_color);
 
-                if is_dark {
-                    painter.circle_filled(
-                        Pos2::new(rect.min.x + rect.width() * 0.2, rect.min.y + 120.0),
-                        160.0,
-                        Color32::from_rgba_unmultiplied(14, 165, 233, 40),
-                    );
-                    painter.circle_filled(
-                        Pos2::new(rect.max.x - rect.width() * 0.2, rect.min.y + 360.0),
-                        200.0,
-                        Color32::from_rgba_unmultiplied(139, 92, 246, 35),
-                    );
-                    painter.circle_filled(
-                        Pos2::new(rect.center().x, rect.center().y),
-                        180.0,
-                        Color32::from_rgba_unmultiplied(59, 130, 246, 25),
-                    );
-                } else {
-                    painter.circle_filled(
-                        Pos2::new(rect.min.x + rect.width() * 0.2, rect.min.y + 120.0),
-                        180.0,
-                        Color32::from_rgba_unmultiplied(56, 189, 248, 80),
-                    );
-                    painter.circle_filled(
-                        Pos2::new(rect.max.x - rect.width() * 0.2, rect.min.y + 360.0),
-                        220.0,
-                        Color32::from_rgba_unmultiplied(244, 114, 182, 70),
-                    );
-                }
+                let mut mesh = egui::Mesh::default();
+                mesh.add_rect_with_vertices(
+                    rect,
+                    [
+                        (Pos2::new(rect.min.x, rect.min.y), c_tl),
+                        (Pos2::new(rect.max.x, rect.min.y), c_tr),
+                        (Pos2::new(rect.max.x, rect.max.y), c_br),
+                        (Pos2::new(rect.min.x, rect.max.y), c_bl),
+                    ],
+                );
+                painter.add(mesh);
 
                 ui.vertical_centered(|ui| {
                     ui.set_max_width(560.0);
@@ -325,9 +319,9 @@ impl eframe::App for AtsSyncApp {
                                 RichText::new(theme_label).size(12.0).strong().color(text_main),
                             )
                             .fill(if is_dark {
-                                Color32::from_rgba_unmultiplied(255, 255, 255, 22)
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 18)
                             } else {
-                                Color32::from_rgba_unmultiplied(255, 255, 255, 220)
+                                Color32::from_rgba_unmultiplied(0, 0, 0, 10)
                             })
                             .stroke(Stroke::new(1.0_f32, card_border))
                             .min_size(Vec2::new(88.0, 24.0));
@@ -355,7 +349,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(10.0);
 
-                    // Frosted Card 1
+                    // Card 1: Directory & JD Input
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -437,7 +431,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // Frosted Card 2
+                    // Card 2: Export Target & Action
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -495,7 +489,7 @@ impl eframe::App for AtsSyncApp {
 
                     ui.add_space(8.0);
 
-                    // Frosted Card 3
+                    // Card 3: Status & Output
                     Frame::none()
                         .fill(card_bg)
                         .rounding(Rounding::same(12.0))
@@ -553,5 +547,30 @@ impl eframe::App for AtsSyncApp {
                         });
                 });
             });
+    }
+}
+
+trait MeshExt {
+    fn add_rect_with_vertices(&mut self, rect: Rect, vertices: [(Pos2, Color32); 4]);
+}
+
+impl MeshExt for egui::Mesh {
+    fn add_rect_with_vertices(&mut self, _rect: Rect, vertices: [(Pos2, Color32); 4]) {
+        let idx = self.vertices.len() as u32;
+        for (pos, color) in vertices {
+            self.vertices.push(egui::epaint::Vertex {
+                pos,
+                uv: egui::epaint::WHITE_UV,
+                color,
+            });
+        }
+        self.indices.extend_from_slice(&[
+            idx,
+            idx + 1,
+            idx + 2,
+            idx,
+            idx + 2,
+            idx + 3,
+        ]);
     }
 }
